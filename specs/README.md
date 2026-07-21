@@ -24,7 +24,7 @@ This directory is the **spec-driven** source of truth for the Cognito + GitHub +
 
 ## Existing codebase baseline
 
-Specs target extending `githubpoc/` (AgentCore runtime `githubWorkflow`). Current agent is a stub (`add_numbers` + optional MCP). Specs describe the target demo behavior, not current behavior.
+Specs target extending `githubpoc/` (AgentCore runtime `githubWorkflow`). Current agent is a stub (`add_numbers` + optional MCP). Specs describe the target demo behavior, not current behavior. Demo UI lives in `ui/` (Streamlit).
 
 ## Change process
 

@@ -29,3 +29,19 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 15:40 +05:30 — Remove Cognito group RBAC from specs
 
 - Specs now use verified custom `role` claim only (no `cognito:groups`); updated spec, design, data-model, tasks, acceptance, and dev-split
+
+## 2026-07-21 15:46 +05:30 — Streamlit demo UI (spec R10)
+
+- Added `ui/app.py` minimal flow: Sign in with Cognito, welcome (role/project), Connect GitHub, Create Agent Task (Cognito/GitHub still stubbed)
+
+## 2026-07-21 15:54 +05:30 — Cognito Hosted UI login
+
+- Wired Streamlit to Cognito Hosted UI (PKCE + code exchange + JWKS ID token verify); added `ui/cognito_auth.py`; set `COGNITO_DOMAIN` / redirect; registered `localhost:8501` callbacks on app client
+
+## 2026-07-21 15:58 +05:30 — Custom Cognito login form
+
+- Replaced Hosted UI with Streamlit username/password → `USER_PASSWORD_AUTH` + `SECRET_HASH`; JWKS ID token verify; stored client secret in gitignored `.env.shared`
+
+## 2026-07-21 16:00 +05:30 — Fix cognito_login import
+
+- Renamed `login` → `cognito_login` and cleared stale import path so Streamlit can load auth module
