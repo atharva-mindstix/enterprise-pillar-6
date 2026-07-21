@@ -29,3 +29,8 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 15:40 +05:30 — Remove Cognito group RBAC from specs
 
 - Specs now use verified custom `role` claim only (no `cognito:groups`); updated spec, design, data-model, tasks, acceptance, and dev-split
+
+## 2026-07-21 15:45 +05:30 — githubWorkflow system prompt
+
+- Added `specs/cognito-github-agent-demo/system-prompt.md` and runtime `system_prompt.md` derived from spec R5–R9
+- Wired `prompt.py` + `main.py` to load the prompt and optionally inject verified session context
