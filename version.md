@@ -59,3 +59,8 @@ Running append-only changelog of code changes in this project.
 
 - Replaced Cognito role→tools and S3/STS ABAC with Gateway + Cedar tool RBAC; ABAC deferred in constitution/spec/design/data-model/tasks/dev-split/acceptance
 - Aligned system prompts, UI (email/sub only), and prompt session injection; dropped ENVIRONMENT_CLAIM from shared env example
+
+## 2026-07-21 16:46 +05:30 — Streamlit GitHub OAuth connect
+
+- Added `ui/github_oauth.py` + Connect GitHub OAuth callback; creates real `agent-task` issues; Cognito↔GitHub map in `.data/`
+- Env: `GITHUB_CLIENT_*` in `.env.shared` / example; UI README setup steps (AgentCore federation still the later upgrade)

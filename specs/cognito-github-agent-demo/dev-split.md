@@ -36,6 +36,7 @@ specs/cognito-github-agent-demo/.env.shared.example  →  .env.shared   (repo ro
 | Region | `AWS_REGION` |
 | Cognito pool / client / domain | `COGNITO_USER_POOL_*`, `COGNITO_APP_CLIENT_ID`, `COGNITO_DOMAIN` |
 | Redirect URI (Streamlit) | `COGNITO_REDIRECT_URI` (default `http://localhost:8501/`) |
+| GitHub OAuth App (UI Connect) | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI` |
 | Dev owners | `DEV1_NAME`, `DEV2_NAME` |
 
 | Optional | Env key |

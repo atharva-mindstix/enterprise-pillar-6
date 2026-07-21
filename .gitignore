@@ -4,3 +4,6 @@
 !.env*.example
 specs/**/.env.shared
 !.env.shared.example
+
+# Local Cognito↔GitHub mapping (no tokens)
+.data/
