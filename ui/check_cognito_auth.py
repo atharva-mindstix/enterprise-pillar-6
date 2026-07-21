@@ -4,13 +4,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env.shared")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env.shared", override=True)
 
 from cognito_auth import _secret_hash  # noqa: E402
 
 assert os.getenv("COGNITO_APP_CLIENT_ID")
 h = _secret_hash("testuser")
-if os.getenv("COGNITO_APP_CLIENT_SECRET"):
+if os.getenv("COGNITO_APP_CLIENT_SECRET", "").strip():
     assert h and len(h) > 20
 else:
     assert h is None

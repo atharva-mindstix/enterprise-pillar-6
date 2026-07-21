@@ -9,13 +9,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import streamlit as st
 from dotenv import load_dotenv
 
-from cognito_auth import cognito_login, user_from_claims, verify_id_token
-
 ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT / ".env.shared")
+load_dotenv(ROOT / ".env.shared", override=True)
+
+import streamlit as st
+
+from cognito_auth import cognito_login, user_from_claims, verify_id_token
 
 
 def _init_state() -> None:
@@ -31,10 +32,12 @@ def _init_state() -> None:
 def sign_in_page() -> None:
     st.title("Agent Demo")
     st.caption("Sign in · Cognito verifies credentials and issues JWT")
+    secret_ok = bool(os.getenv("COGNITO_APP_CLIENT_SECRET", "").strip())
     st.write(
         f"Pool `{os.getenv('COGNITO_USER_POOL_ID', '—')}` · "
         f"Client `{os.getenv('COGNITO_APP_CLIENT_ID', '—')}` · "
-        f"Region `{os.getenv('AWS_REGION', '—')}`"
+        f"Region `{os.getenv('AWS_REGION', '—')}` · "
+        f"client secret `{'set' if secret_ok else 'MISSING'}`"
     )
 
     if st.session_state.auth_error:

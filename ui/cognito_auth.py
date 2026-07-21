@@ -7,12 +7,18 @@ import hashlib
 import hmac
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import boto3
 import jwt
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 from jwt import PyJWKClient
+
+# App client has a secret → Cognito requires SECRET_HASH. Load here so login
+# never depends on app.py import order; override so an empty shell var can't win.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env.shared", override=True)
 
 
 def _cfg() -> dict[str, str]:
@@ -62,6 +68,11 @@ def cognito_login(username: str, password: str) -> dict[str, str]:
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "ClientError")
         msg = exc.response.get("Error", {}).get("Message", str(exc))
+        if "SECRET_HASH" in msg and not c["client_secret"]:
+            raise RuntimeError(
+                f"{code}: {msg}. Set COGNITO_APP_CLIENT_SECRET in .env.shared "
+                "and restart Streamlit."
+            ) from exc
         raise RuntimeError(f"{code}: {msg}") from exc
 
     challenge = resp.get("ChallengeName")

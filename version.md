@@ -49,3 +49,8 @@ Running append-only changelog of code changes in this project.
 
 - Added `specs/cognito-github-agent-demo/system-prompt.md` and runtime `system_prompt.md` derived from spec R5–R9
 - Wired `prompt.py` + `main.py` to load the prompt and optionally inject verified session context
+
+## 2026-07-21 16:16 +05:30 — Fix Cognito SECRET_HASH not sent
+
+- Load `.env.shared` from `cognito_auth` with `override=True` so client secret always reaches `SECRET_HASH`
+- Login page shows whether client secret is set; clearer error if Cognito still rejects missing hash
