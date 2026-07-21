@@ -21,3 +21,7 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 14:56 +05:30 — Shared contract env file
 
 - Added `.env.shared` + `.env.shared.example` for Day-0 shared contract; gitignore local env; pointed `dev-split.md` at the env file
+
+## 2026-07-21 15:28 +05:30 — Minimal shared env
+
+- Slimmed `.env.shared` / example to AWS + Cognito + optional `AGENTCORE_GATEWAY_ARN` + dev owners; other names stay as spec defaults

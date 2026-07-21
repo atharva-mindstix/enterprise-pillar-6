@@ -23,24 +23,27 @@ Do this together once, then work separately:
 
 ### Shared contract (fill `.env.shared`)
 
-Do **not** edit a table by hand. Fill the env file:
+Minimal env only. Everything else (S3/role/tool/repo names) stays as fixed defaults in the specs.
 
 ```text
 specs/cognito-github-agent-demo/.env.shared.example  →  .env.shared   (repo root)
 ```
 
-Both devs use the same `.env.shared` (gitignored). Defaults already match the specs. Fill blanks as you create resources.
-
-| Item | Env key(s) |
+| Required | Env key |
 | --- | --- |
-| AWS account / region | `AWS_ACCOUNT_ID`, `AWS_REGION` |
-| Cognito pool / client / issuer | `COGNITO_USER_POOL_*`, `COGNITO_APP_CLIENT_ID`, `COGNITO_ISSUER` |
-| S3 bucket | `S3_BUCKET_NAME` |
-| Runtime / task roles | `RUNTIME_ROLE_NAME`, `TASK_ROLE_NAME`, `*_ARN` |
-| Demo repo | `GITHUB_OWNER`, `GITHUB_REPO` |
-| Claims / project | `PROJECT_CLAIM`, `ENVIRONMENT_CLAIM`, `COGNITO_CLAIM_STRATEGY` |
-| Tools / issue label | `TOOL_*`, `GITHUB_ISSUE_LABEL` (fixed) |
+| AWS account | `AWS_ACCOUNT_ID` |
+| Region | `AWS_REGION` |
+| Cognito pool name | `COGNITO_USER_POOL_NAME` |
+| Cognito pool id | `COGNITO_USER_POOL_ID` |
+| Cognito app client | `COGNITO_APP_CLIENT_ID` |
+| Environment claim | `ENVIRONMENT_CLAIM` |
 | Dev owners | `DEV1_NAME`, `DEV2_NAME` |
+
+| Optional | Env key |
+| --- | --- |
+| Gateway ARN (when created) | `AGENTCORE_GATEWAY_ARN` |
+
+JWT issuer (not stored): `https://cognito-idp.${AWS_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`
 
 **Ownership boundary (do not cross without ping):**
 

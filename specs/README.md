@@ -19,7 +19,7 @@ This directory is the **spec-driven** source of truth for the Cognito + GitHub +
 | [`cognito-github-agent-demo/data-model.md`](./cognito-github-agent-demo/data-model.md) | Claims, tokens, session tags, S3 layout |
 | [`cognito-github-agent-demo/tasks.md`](./cognito-github-agent-demo/tasks.md) | Ordered implementation checklist (single queue) |
 | [`cognito-github-agent-demo/dev-split.md`](./cognito-github-agent-demo/dev-split.md) | Parallel Dev 1 / Dev 2 tasklists |
-| [`cognito-github-agent-demo/.env.shared.example`](./cognito-github-agent-demo/.env.shared.example) | Shared contract env template (copy → repo-root `.env.shared`) |
+| [`cognito-github-agent-demo/.env.shared.example`](./cognito-github-agent-demo/.env.shared.example) | Minimal shared env (AWS, Cognito, optional gateway ARN) |
 | [`cognito-github-agent-demo/acceptance.md`](./cognito-github-agent-demo/acceptance.md) | Demo walkthrough as acceptance criteria |
 
 ## Existing codebase baseline
