@@ -9,6 +9,7 @@ from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
 from mcp_client.client import get_streamable_http_mcp_client
+from prompt import build_system_prompt
 
 LangchainInstrumentor().instrument()
 
@@ -22,12 +23,6 @@ def get_or_create_model():
     if _llm is None:
         _llm = load_model()
     return _llm
-
-
-DEFAULT_SYSTEM_PROMPT = """
-You are a helpful assistant. Use tools when appropriate.
-
-"""
 
 
 # Define a simple function tool
@@ -74,11 +69,14 @@ async def invoke(payload, context):
     if mcp_client:
         mcp_tools = await mcp_client.get_tools()
 
+    session_context = payload.get("session")
+    system_prompt = build_system_prompt(session_context)
+
     # Define the agent using create_react_agent (checkpointer is shared across invocations)
     graph = create_react_agent(
         get_or_create_model(),
         tools=mcp_tools + tools,
-        prompt=DEFAULT_SYSTEM_PROMPT,
+        prompt=system_prompt,
         checkpointer=_checkpointer,
     )
 

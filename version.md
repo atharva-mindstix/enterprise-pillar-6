@@ -45,3 +45,7 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 16:00 +05:30 — Fix cognito_login import
 
 - Renamed `login` → `cognito_login` and cleared stale import path so Streamlit can load auth module
+## 2026-07-21 15:45 +05:30 — githubWorkflow system prompt
+
+- Added `specs/cognito-github-agent-demo/system-prompt.md` and runtime `system_prompt.md` derived from spec R5–R9
+- Wired `prompt.py` + `main.py` to load the prompt and optionally inject verified session context
