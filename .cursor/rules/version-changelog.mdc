@@ -1,0 +1,27 @@
+---
+description: Append a summary of every code change to version.md (never delete or overwrite)
+alwaysApply: true
+---
+
+# Append-only changelog in version.md
+
+After you finish making code changes in this project (features, fixes, refactors, config), **append** a short entry to `version.md` at the project root.
+
+## Hard rules
+
+- **Append only** — never delete, clear, overwrite, or rewrite existing entries in `version.md`
+- Do this for **every** batch of code changes you make in a turn (not only when the user asks)
+- Skip when the only change is the `version.md` entry itself
+- Skip pure Q&A / read-only turns with no file edits
+
+## Entry format
+
+Append at the end of the file:
+
+```markdown
+## YYYY-MM-DD HH:MM ±HH:MM — short title
+
+- What changed (1–3 bullets: files/areas and why)
+```
+
+Use the **current local date and time** with numeric UTC offset (e.g. `2026-07-21 14:09 +05:30`). Keep it brief and factual so `version.md` is a running development log.
