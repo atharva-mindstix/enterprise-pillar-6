@@ -54,3 +54,8 @@ Running append-only changelog of code changes in this project.
 
 - Load `.env.shared` from `cognito_auth` with `override=True` so client secret always reaches `SECRET_HASH`
 - Login page shows whether client secret is set; clearer error if Cognito still rejects missing hash
+
+## 2026-07-21 16:40 +05:30 — Specs: Cedar RBAC; defer ABAC
+
+- Replaced Cognito role→tools and S3/STS ABAC with Gateway + Cedar tool RBAC; ABAC deferred in constitution/spec/design/data-model/tasks/dev-split/acceptance
+- Aligned system prompts, UI (email/sub only), and prompt session injection; dropped ENVIRONMENT_CLAIM from shared env example

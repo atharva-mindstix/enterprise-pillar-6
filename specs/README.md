@@ -16,7 +16,8 @@ This directory is the **spec-driven** source of truth for the Cognito + GitHub +
 | [`constitution.md`](./constitution.md) | Hard invariants (auth vs GitHub, trust boundaries) |
 | [`cognito-github-agent-demo/spec.md`](./cognito-github-agent-demo/spec.md) | Requirements (MUST / SHALL) |
 | [`cognito-github-agent-demo/design.md`](./cognito-github-agent-demo/design.md) | Architecture, flows, component responsibilities |
-| [`cognito-github-agent-demo/data-model.md`](./cognito-github-agent-demo/data-model.md) | Claims, tokens, session tags, S3 layout |
+| [`cognito-github-agent-demo/data-model.md`](./cognito-github-agent-demo/data-model.md) | Claims, tokens, Cedar tool matrix (ABAC deferred) |
+| [`cognito-github-agent-demo/system-prompt.md`](./cognito-github-agent-demo/system-prompt.md) | Advisory agent prompt (Cedar is the RBAC boundary) |
 | [`cognito-github-agent-demo/tasks.md`](./cognito-github-agent-demo/tasks.md) | Ordered implementation checklist (single queue) |
 | [`cognito-github-agent-demo/dev-split.md`](./cognito-github-agent-demo/dev-split.md) | Parallel Dev 1 / Dev 2 tasklists |
 | [`cognito-github-agent-demo/.env.shared.example`](./cognito-github-agent-demo/.env.shared.example) | Minimal shared env (AWS, Cognito, optional gateway ARN) |

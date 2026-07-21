@@ -22,12 +22,9 @@ def build_system_prompt(session: dict[str, Any] | None = None) -> str:
     field_labels = [
         ("email", "User email"),
         ("sub", "User sub"),
-        ("role", "Role"),
-        ("project", "Project"),
-        ("environment", "Environment"),
         ("repository", "Repository"),
         ("issue_number", "Issue"),
-        ("allowed_tools", "Allowed tools"),
+        ("task_type", "Task type"),
     ]
     for key, label in field_labels:
         value = session.get(key)
@@ -35,8 +32,6 @@ def build_system_prompt(session: dict[str, Any] | None = None) -> str:
             continue
         if key == "issue_number":
             value = f"#{value}"
-        if key == "allowed_tools" and isinstance(value, list):
-            value = ", ".join(value)
         lines.append(f"- {label}: {value}")
 
     if len(lines) <= 3:

@@ -13,33 +13,33 @@ User submits coding task (UI creates GitHub issue)
         ↓
 Single agent processes issue
         ↓
-RBAC selects permitted tools
+Agent invokes tools via AgentCore Gateway
         ↓
-STS AssumeRole with user/project attributes
+Cedar Policy Engine allow/deny (RBAC)
         ↓
-ABAC controls AWS project resources
-        ↓
-Agent updates repository and creates PR
+Agent updates repository and creates PR (GitHub OAuth)
 ```
+
+**Deferred (later phase):** STS AssumeRole + S3 ABAC for project-scoped AWS resources.
 
 ## Component map
 
 | Component | Responsibility |
 | --- | --- |
-| **Demo UI** | Cognito Hosted UI / SDK login; Connect GitHub; Create Agent Task form; display role/project |
-| **Cognito User Pool** | Users + custom claims (`role`, `project`, `environment`) — no Cognito groups for RBAC |
-| **AgentCore Runtime** (`githubWorkflow`) | JWT inbound auth; agent invoke; tool execution |
+| **Demo UI** | Cognito login; Connect GitHub; Create Agent Task; show email/`sub` |
+| **Cognito User Pool** | Users + identity JWT (`sub`, `email`, …) — **not** used for tool RBAC |
+| **AgentCore Runtime** (`githubWorkflow`) | JWT inbound auth; agent invoke |
 | **AgentCore Identity** | `GetWorkloadAccessTokenForJWT`; GitHub OAuth provider; `GetResourceOauth2Token` |
-| **Agent app** (`app/githubWorkflow`) | Build agent with role-filtered tools; AssumeRole; run task; GitHub PR |
-| **IAM** | `GitHubAgentRuntimeRole` → assume `GitHubTaskExecutionRole` + TagSession |
-| **S3** | `agent-project-resources` with per-project prefixes |
+| **AgentCore Gateway** | Exposes the three demo tools as MCP/gateway targets |
+| **Policy Engine (Cedar)** | Permit/forbid tool invocations (`ENFORCE` for acceptance) |
+| **Agent app** (`app/githubWorkflow`) | Task loop; call tools; GitHub PR |
 | **GitHub** | Issues (`agent-task`), branches, PRs via user OAuth |
 
 ## Authentication & GitHub connect flow
 
 ```text
 1. User signs in through Cognito
-2. UI receives Cognito access token
+2. UI receives Cognito access/ID token
 3. UI sends token to AgentCore Runtime
 4. AgentCore validates issuer, audience, client, scopes, claims
 5. GetWorkloadAccessTokenForJWT → workload token (agent + Cognito user)
@@ -62,13 +62,11 @@ References:
 UI form (repo, task, type)
   → Backend creates GitHub issue with label agent-task
   → Issue body/comments include Cognito sub
-  → Agent session bound to issue + verified claims
-  → Tools filtered by role
-  → STS AssumeRole + session tags
-  → Read coding-standards from S3 project prefix
+  → Agent session bound to issue + verified identity
+  → Tool calls go through Gateway
+  → Cedar permit/forbid
   → Mutate repo via GitHub OAuth tools
   → Open PR
-  → Write task-results to S3 project prefix
 ```
 
 ## User-context propagation
@@ -80,114 +78,85 @@ AgentCore workload token
     ↓
 Agent session
     ↓
-Tool authorization (RBAC)
+Gateway tool call
     ↓
-STS session tags (ABAC)
+Cedar Policy Engine (RBAC)
     ↓
-GitHub task + AWS resource access
+GitHub task (OAuth)
 ```
 
-Claims source: Cognito access/ID token (`sub`, `email`, custom `role` / `project` / `environment` / `github_user_id` as configured). Put `role` on the token via custom attributes or a pre-token-generation Lambda. **Do not** use Cognito groups (`cognito:groups`) for tool authorization.
+Claims source for identity: Cognito access/ID token (`sub`, `email`; `github_user_id` after Connect GitHub mapping).
 
-**Do not** accept role/project overrides from request body without matching verified JWT.
+**Do not** accept “allow source tools” overrides from the browser or issue body.
 
-## RBAC design
+## RBAC design (Cedar)
 
-Construct tools at graph build time:
+All three tools are registered on the Gateway. Authorization is Cedar on the Policy Engine attached to that Gateway.
 
-```python
-# illustrative — not implementation
-if role == "DocumentationDeveloper":
-    tools = [inspect_repository, update_documentation]
-elif role == "Developer":
-    tools = [inspect_repository, update_documentation, modify_source_code]
-elif role == "Viewer":
-    tools = [inspect_repository]
-else:
-    deny
+Illustrative Cedar (syntax may need alignment to the Gateway’s generated schema at deploy time):
+
+```cedar
+// Documentation agent: allow inspect + docs; deny source
+permit (
+  principal,
+  action == Action::"inspect_repository",
+  resource
+);
+
+permit (
+  principal,
+  action == Action::"update_documentation",
+  resource
+);
+
+forbid (
+  principal,
+  action == Action::"modify_source_code",
+  resource
+);
 ```
 
-Also enforce inside tool handlers or AgentCore Gateway policies so a forged tool call still fails.
+Bring-up: attach Policy Engine in `LOG_ONLY`, verify decisions in logs, then switch Gateway `policyEngineConfiguration.mode` to `ENFORCE`.
+
+Declare engines/policies in `agentcore.json` (`policyEngines` + gateway `policyEngineConfiguration`) — schema-first; see AgentCore Policy guide.
 
 Demo expectations:
 
 | Prompt | Expected |
 | --- | --- |
-| Update README installation steps | `inspect_repository` + `update_documentation` allowed; `modify_source_code` unavailable |
-| Modify authentication Python code | Denied for DocumentationDeveloper |
+| Update README installation steps | Cedar allows `inspect_repository` + `update_documentation` |
+| Modify authentication Python code | Cedar denies `modify_source_code` (not prompt-only) |
 
-## ABAC + STS design
+### Why not Cognito `role` → tools?
 
-Runtime role: `GitHubAgentRuntimeRole` (no direct project S3).
+That pattern duplicates authorization in app code and fights AgentCore’s Gateway Policy Engine. For this POC, **one documentation-oriented agent** + Cedar is enough to show real RBAC. Finer per-user roles can be added later (JWT attributes / groups as Cedar principals) without changing the three tool names.
 
-Task role: `GitHubTaskExecutionRole` with policy using [IAM policy variables / principal tags](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html):
+## Deferred ABAC (ideas — not required now)
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject"],
-      "Resource": "arn:aws:s3:::agent-project-resources/${aws:PrincipalTag/Project}/*"
-    }
-  ]
-}
-```
+Pick one later; do not block Cognito / GitHub / Cedar work:
 
-AssumeRole pattern ([session tags](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html)):
+| Option | Idea | Pros |
+| --- | --- | --- |
+| **A. STS + S3** (original) | AssumeRole with `Project` tag; IAM `${aws:PrincipalTag/Project}/*` | Classic AWS ABAC story |
+| **B. Cedar attributes (no S3)** | Conditions on repo, path prefix, or task type (e.g. docs paths only) | Stays agent/gateway-native; no bucket |
+| **C. Hybrid** | Cedar for tools; STS+S3 only when AWS project files are needed | Clear split |
 
-```python
-sts.assume_role(
-    RoleArn="arn:aws:iam::ACCOUNT:role/GitHubTaskExecutionRole",
-    RoleSessionName="issue-24-user-123",
-    Tags=[
-        {"Key": "Project", "Value": "AgentDemo"},
-        {"Key": "Environment", "Value": "dev"},
-        {"Key": "UserId", "Value": "cognito-user-123"},
-        {"Key": "Role", "Value": "DocumentationDeveloper"},
-    ],
-)
-```
-
-ABAC demo:
-
-| Action | Result |
-| --- | --- |
-| Read `AgentDemo/coding-standards.md` | Allowed when `Project=AgentDemo` |
-| Read `ProjectB/coding-standards.md` | Denied (same role/policy) |
-
-See [ABAC introduction](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction_attribute-based-access-control.html).
-
-## What STS demonstrates vs GitHub OAuth
-
-```text
-Agent runtime identity
-        ↓ assumes
-Task execution identity
-        ↓ constrained by
-Temporary credentials + session tags
-```
-
-- Agent has its own workload identity.
-- Agent does not permanently hold project permissions.
-- AWS access exists only for task duration.
-- User/project context attaches to the role session (CloudTrail).
-- GitHub access still uses GitHub OAuth; STS is AWS-only.
+Recommendation for “after Cedar works”: start with **B** if you only need agent-level boundaries; add **A** when you want a CloudTrail/IAM ABAC demo.
 
 ## Mapping to existing repo
 
 | Area | Current | Target |
 | --- | --- | --- |
-| `agentcore/agentcore.json` | Runtime only; empty credentials/gateways | Add Cognito JWT auth config, GitHub OAuth credential provider, optional Gateway/policies |
-| `app/githubWorkflow/main.py` | Stub tools + always-on tool list | Claim extraction, role→tools, STS, real tools |
-| UI | None | Minimal Cognito + Connect GitHub + Create Task |
-| IAM / S3 | Not in specs yet | CDK or documented IaC for roles, bucket, seed files |
+| `agentcore/agentcore.json` | Runtime only; empty credentials/gateways/policies | Cognito JWT auth, GitHub OAuth provider, Gateway + Policy Engine + Cedar |
+| `app/githubWorkflow` | Stub tools | Real tools + task loop; rely on Gateway/Cedar for deny |
+| UI | Cognito login shell | Connect GitHub + Create Task (live) |
+| IAM / S3 | — | Deferred |
 
-## Design decisions (locked for POC)
+## Design decisions (locked for this POC)
 
 1. **Single agent** — no multi-agent split.
 2. **UI creates issues** — preferred over manual-only mapping.
 3. **Three tools only** — names fixed in `spec.md` R6.
-4. **DocumentationDeveloper** is the primary demo login.
-5. **Fail closed** on unknown role / missing GitHub federation.
+4. **Cedar on Gateway** is the RBAC boundary (not Cognito role maps).
+5. **ABAC / STS / S3 deferred**.
+6. **Fail closed** on missing GitHub federation; Cedar default-deny for tools.

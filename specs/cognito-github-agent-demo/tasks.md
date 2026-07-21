@@ -6,18 +6,17 @@ Work top-to-bottom. Check boxes only when the acceptance scenarios that depend o
 
 ## Phase 0 — Spec lock
 
-- [ ] Confirm constitution + `spec.md` with stakeholders
-- [ ] Confirm Cognito custom claim strategy for `role` / `project` / `environment` (custom attrs or pre-token Lambda — **no Cognito groups**)
-- [ ] Confirm AWS account, region, demo repo `agent-demo`, bucket name
+- [ ] Confirm constitution + `spec.md` with stakeholders (Cedar RBAC; ABAC deferred)
+- [ ] Confirm AWS account, region, demo repo `agent-demo`
 
 ## Phase 1 — Identity (Cognito + AgentCore JWT)
 
-- [ ] Create/configure Cognito User Pool + app client + Hosted UI (or SDK)
-- [ ] Define custom attributes or token claims: `role`, `project`, `environment`
-- [ ] Create demo user Priya with `role=DocumentationDeveloper`, `project=AgentDemo`, `environment=dev`
+- [ ] Create/configure Cognito User Pool + app client
+- [ ] Create demo user Priya (identity only — no Cognito role→tools map)
 - [ ] Configure AgentCore Runtime inbound JWT authorizer (issuer, audience, client, scopes)
 - [ ] Wire `GetWorkloadAccessTokenForJWT` path for authenticated invokes
 - [ ] Verify: invalid JWT rejected; valid JWT yields workload token
+
 ## Phase 2 — GitHub OAuth via AgentCore Identity
 
 - [ ] Register GitHub OAuth App; configure AgentCore GitHub credential provider
@@ -29,52 +28,46 @@ Work top-to-bottom. Check boxes only when the acceptance scenarios that depend o
 ## Phase 3 — Demo UI (minimum)
 
 - [ ] Sign in with Cognito
-- [ ] Post-login: Welcome, email, Role, Project
+- [ ] Post-login: Welcome, email, `sub`
 - [ ] Connect GitHub button + status (connected / not)
 - [ ] Create Agent Task form: Repository, Task, Task type
 - [ ] Call backend to create labeled GitHub issue with Cognito sub in body
 
-## Phase 4 — IAM / S3 (ABAC + STS)
-
-- [ ] Create S3 bucket `agent-project-resources` with `AgentDemo/` and `ProjectB/` seed files
-- [ ] Create `GitHubTaskExecutionRole` + S3 policy using `${aws:PrincipalTag/Project}`
-- [ ] Trust policy: allow runtime role `sts:AssumeRole` + `sts:TagSession`
-- [ ] Runtime role `GitHubAgentRuntimeRole`: AssumeRole only (no direct project S3)
-- [ ] Seed `AgentDemo/coding-standards.md` and `ProjectB/coding-standards.md`
-- [ ] Verify: tagged session can read AgentDemo only
-
-## Phase 5 — Agent RBAC tools
+## Phase 4 — Gateway tools + Cedar RBAC
 
 - [ ] Implement `inspect_repository`
 - [ ] Implement `update_documentation` (docs paths only)
-- [ ] Implement `modify_source_code`
-- [ ] Map verified `role` claim → tool list at agent construction
-- [ ] In-tool or Gateway deny for unauthorized tools
-- [ ] Verify DocumentationDeveloper cannot call `modify_source_code`
+- [ ] Implement `modify_source_code` (exists so Cedar deny can be demonstrated)
+- [ ] Register tools on AgentCore Gateway
+- [ ] Create Policy Engine + Cedar policies (permit inspect + docs; forbid source)
+- [ ] Attach Policy Engine to Gateway (`LOG_ONLY` then `ENFORCE`)
+- [ ] Verify: docs tools succeed; `modify_source_code` denied by Cedar
 
-## Phase 6 — Single-agent task loop
+## Phase 5 — Single-agent task loop
 
-- [ ] On task start: load verified claims → filter tools → AssumeRole with tags
-- [ ] Read project coding standards from authorized S3 prefix
-- [ ] Attempt cross-project read (expect deny) for demo logging
+- [ ] On task start: load verified identity → run tools via Gateway → open PR
 - [ ] Apply repo changes via GitHub OAuth; open PR
-- [ ] Write results under `AgentDemo/task-results/issue-N/`
-- [ ] Log traceability chain (sub, github user, issue, session, PR)
+- [ ] Log traceability chain (sub, github user, issue, Cedar decisions, PR)
 
-## Phase 7 — AgentCore project wiring
+## Phase 6 — AgentCore project wiring
 
-- [ ] Update `agentcore/agentcore.json` (credentials, auth, gateway/policies as needed)
+- [ ] Update `agentcore/agentcore.json` (credentials, auth, gateway, policyEngines)
 - [ ] Keep schema-first: no hand-edit of generated CDK as source of truth
 - [ ] `agentcore validate` + deploy path documented
 
-## Phase 8 — Acceptance
+## Phase 7 — Acceptance
 
-- [ ] Run full script in `acceptance.md` as Priya / DocumentationDeveloper / AgentDemo
-- [ ] Capture evidence: Cognito login, GitHub connect, issue #, tool allow/deny, S3 allow/deny, PR URL, CloudTrail/CloudWatch notes
-- [ ] Append `version.md` entry when implementation lands (not for this specs-only change set if only specs added — follow project changelog rule)
+- [ ] Run full script in `acceptance.md` as Priya
+- [ ] Capture evidence: Cognito login, GitHub connect, issue #, Cedar allow/deny, PR URL, log notes
+- [ ] Append `version.md` entry when implementation lands
+
+## Deferred (later — not blocking)
+
+- [ ] ABAC: STS AssumeRole + session tags + S3 project prefixes **or** Cedar attribute conditions (path/repo/task type) — see `design.md`
 
 ## Explicitly not in this checklist
 
 - Multi-agent orchestration
-- Per-project IAM roles/policies (defeats ABAC demo)
+- Cognito `role` claim → Python tool allowlists
 - Prompt-only RBAC
+- Implementing S3/STS ABAC before Cedar RBAC is done

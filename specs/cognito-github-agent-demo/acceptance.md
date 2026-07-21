@@ -1,17 +1,15 @@
 # Acceptance — final demo scenario
 
-These scenarios are the definition of done for the POC. All must pass with **Priya** unless noted.
+These scenarios are the definition of done for the current POC. All must pass with **Priya** unless noted.
 
 ## Demo identity
 
 | Attribute | Value |
 | --- | --- |
 | Cognito user | Priya |
-| Role claim | `DocumentationDeveloper` |
-| Project | `AgentDemo` |
-| Environment | `dev` |
 | Repository | `agent-demo` |
 | Task | Update README with local deployment instructions |
+| RBAC | Cedar on Gateway: docs tools allow; `modify_source_code` deny |
 
 ---
 
@@ -19,7 +17,7 @@ These scenarios are the definition of done for the POC. All must pass with **Pri
 
 **Given** Priya is not signed in  
 **When** she chooses Sign in with Cognito and authenticates  
-**Then** the UI shows Welcome with her email, Role `DocumentationDeveloper`, Project `AgentDemo`  
+**Then** the UI shows Welcome with her email and Cognito `sub`  
 **And** subsequent AgentCore calls carry a Cognito JWT that passes inbound JWT validation
 
 ---
@@ -40,79 +38,63 @@ These scenarios are the definition of done for the POC. All must pass with **Pri
 **When** she submits Create Agent Task for repo `agent-demo` with a documentation task  
 **Then** GitHub issue `#N` exists with label `agent-task`  
 **And** the issue references her Cognito `sub`  
-**And** an agent session is bound to that issue and her verified claims
+**And** an agent session is bound to that issue and her verified identity
 
 ---
 
-## A4 — Tool RBAC (allow docs)
+## A4 — Tool RBAC (Cedar allow docs)
 
-**Given** Priya’s session role is `DocumentationDeveloper`  
+**Given** Gateway Policy Engine is in `ENFORCE` with the demo Cedar policies  
 **When** the task is “Update the README installation steps”  
 **Then** `inspect_repository` is allowed  
 **And** `update_documentation` is allowed  
-**And** `modify_source_code` is not available to the agent
+**And** `modify_source_code` is denied / not successfully executable
 
 ---
 
-## A5 — Tool RBAC (deny source)
+## A5 — Tool RBAC (Cedar deny source)
 
-**Given** Priya’s session role is `DocumentationDeveloper`  
-**When** she asks to modify authentication Python source  
-**Then** the system denies source modification  
-**And** the denial is enforced by missing/blocked tool (not only a system-prompt instruction)
-
----
-
-## A6 — STS AssumeRole
-
-**Given** a task for issue `#N` has started  
-**When** the agent needs AWS project resources  
-**Then** it assumes `GitHubTaskExecutionRole` with session tags including `Project=AgentDemo`, `Environment=dev`, `UserId=<sub>`, `Role=DocumentationDeveloper`  
-**And** the runtime role itself cannot read project S3 directly
+**Given** the same Cedar policies  
+**When** the agent (or a test client) attempts `modify_source_code`  
+**Then** the Gateway / Policy Engine denies the call  
+**And** the denial is **not** only a system-prompt instruction
 
 ---
 
-## A7 — ABAC allow / deny
+## A6 — Repository outcome
 
-**Given** STS session tag `Project=AgentDemo`  
-**When** the agent reads `AgentDemo/coding-standards.md`  
-**Then** access is allowed  
-
-**When** the agent reads `ProjectB/coding-standards.md`  
-**Then** access is denied  
-**And** the IAM role/policy documents are unchanged between the two attempts
-
----
-
-## A8 — Repository outcome
-
-**Given** A1–A7 succeeded for the README task  
+**Given** A1–A5 succeeded for the README task  
 **When** the agent completes  
 **Then** documentation in `agent-demo` is updated on a branch  
 **And** a pull request is opened  
-**And** task results are written under the `AgentDemo` S3 prefix  
-**And** CloudTrail / CloudWatch / GitHub can show the corresponding activity
+**And** CloudWatch / GitHub (and CloudTrail where applicable) can show the corresponding activity
 
 ---
 
-## A9 — End-to-end checklist (narration order)
+## A7 — End-to-end checklist (narration order)
 
 Use this as the live demo script:
 
 1. Priya logs in through Cognito.
 2. Priya connects GitHub.
 3. UI creates GitHub issue `#N` using Priya’s authorization.
-4. Cognito JWT identifies Priya and her role.
-5. Agent receives only `inspect_repository` and `update_documentation`.
-6. Agent assumes `GitHubTaskExecutionRole`.
-7. STS session includes `Project=AgentDemo`.
-8. Agent reads `AgentDemo/coding-standards.md`.
-9. Agent cannot read `ProjectB/coding-standards.md`.
-10. Agent updates README.
-11. Agent pushes a branch and creates a PR.
-12. CloudTrail, CloudWatch, and GitHub show the activity.
+4. Cognito JWT identifies Priya.
+5. Agent tool calls go through the Gateway; Cedar allows inspect + docs update.
+6. Cedar denies `modify_source_code`.
+7. Agent updates README.
+8. Agent pushes a branch and creates a PR.
+9. Logs show sub, issue, Cedar decisions, PR URL.
 
-**Pass criterion:** Steps 1–12 complete without granting Developer tools or cross-project S3 access.
+**Pass criterion:** Steps 1–9 complete without a successful source-code tool invocation.
+
+---
+
+## Deferred (not acceptance for this POC)
+
+| Scenario | Status |
+| --- | --- |
+| STS AssumeRole + session tags | Deferred |
+| S3 `AgentDemo` allow / `ProjectB` deny (ABAC) | Deferred |
 
 ---
 
@@ -122,5 +104,5 @@ Use this as the live demo script:
 | --- | --- |
 | No / invalid Cognito JWT | Runtime rejects; no workload token |
 | Cognito signed in but GitHub not connected | Cannot create issue / cannot run GitHub tools |
-| Browser sends `role=Developer` while JWT is DocumentationDeveloper | Ignored; tools stay DocumentationDeveloper |
-| Unknown / missing `role` claim | Fail closed (no tools / deny) |
+| Call `modify_source_code` despite prompt asking for it | Cedar deny |
+| Prompt-only “please don’t use source tool” without Cedar | **Insufficient** — must fail A5 |

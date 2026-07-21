@@ -1,4 +1,4 @@
-# Data model — claims, tokens, tags, storage
+# Data model — claims, tokens, storage
 
 ## Tokens (remain separate)
 
@@ -7,7 +7,8 @@
 | Cognito access / ID JWT | Cognito User Pool | Prove app user identity to AgentCore |
 | AgentCore workload token | AgentCore Identity (`GetWorkloadAccessTokenForJWT`) | Represent agent workload + Cognito user; call Identity APIs |
 | GitHub OAuth credential | AgentCore Identity (`GetResourceOauth2Token`, USER_FEDERATION) | GitHub API on behalf of user |
-| AWS temporary credentials | STS AssumeRole | S3 (and any AWS) project access only |
+
+> STS temporary credentials / S3 ABAC: **deferred** (not part of current POC data model).
 
 ## Cognito claims (verified)
 
@@ -17,20 +18,9 @@ Minimum claim set after verification:
 | --- | --- | --- |
 | `sub` | Cognito | Primary user id |
 | `email` | Cognito | Display in UI |
-| `role` | Custom claim (attribute / pre-token Lambda) | RBAC; **not** from Cognito groups |
-| `project` | Custom claim or server mapping | e.g. `AgentDemo` |
-| `environment` | Custom claim or server mapping | e.g. `dev` |
 | `github_user_id` | Set after Connect GitHub / mapping | Optional until GitHub linked |
 
-### Canonical `role` values
-
-| `role` | Meaning |
-| --- | --- |
-| `Viewer` | Read-only repo inspect |
-| `DocumentationDeveloper` | Inspect + docs updates (demo persona) |
-| `Developer` | All tools including source changes |
-
-Do **not** use Cognito groups or `cognito:groups` for authorization.
+**Not used for tool RBAC in this POC:** Cognito `role`, `project`, `environment`, or `cognito:groups`. Tool allow/deny is Cedar on the Gateway (see below).
 
 ## Server-side mapping (Connect GitHub)
 
@@ -50,7 +40,7 @@ Required for optional manual-issue path (R4).
 | Field | Value |
 | --- | --- |
 | Title | From task description (or truncated) |
-| Body | Task text + Cognito sub + role + project + environment |
+| Body | Task text + Cognito sub (+ optional task type) |
 | Label | `agent-task` |
 | Repo | Demo default `agent-demo` |
 
@@ -58,8 +48,6 @@ Body **SHALL** include a machine-readable line, e.g.:
 
 ```text
 Requested by Cognito user: <sub>
-Project: AgentDemo
-Role: DocumentationDeveloper
 ```
 
 ## Agent session context
@@ -70,70 +58,35 @@ In-memory / request-scoped context after auth (not browser-trusted):
 | --- | --- | --- |
 | `cognito_sub` | string | `cognito-user-123` |
 | `email` | string | `developer@example.com` |
-| `role` | enum | `DocumentationDeveloper` |
-| `project` | string | `AgentDemo` |
-| `environment` | string | `dev` |
 | `github_user_id` | string | `987654` |
 | `issue_number` | int | `24` |
 | `repository` | string | `agent-demo` |
-| `allowed_tools` | string[] | `inspect_repository`, `update_documentation` |
-| `sts_session_name` | string | `issue-24-user-123` |
+| `task_type` | string | `Documentation` |
 
-## STS session tags
+Tool permission is **not** a client-supplied list; it is the Cedar evaluation result at invoke time.
 
-| Key | Value source |
+## Cedar / Gateway RBAC (POC)
+
+| Tool | Expected Cedar result |
 | --- | --- |
-| `Project` | verified `project` |
-| `Environment` | verified `environment` |
-| `UserId` | Cognito `sub` |
-| `Role` | verified role |
+| `inspect_repository` | permit |
+| `update_documentation` | permit |
+| `modify_source_code` | forbid / deny |
 
-IAM evaluates `aws:PrincipalTag/Project` (and optionally others) against resource paths.
-
-## S3 layout
-
-Bucket: `agent-project-resources` (name may include account/env suffix in deploy; prefix convention is normative).
-
-```text
-s3://agent-project-resources/
-  AgentDemo/
-    coding-standards.md
-    repository-config.json
-    task-results/
-      issue-24/
-        ...
-  ProjectB/
-    coding-standards.md
-    repository-config.json
-    task-results/
-```
-
-Object key pattern for ABAC:
-
-```text
-${Project}/...
-```
-
-Resource ARN pattern:
-
-```text
-arn:aws:s3:::agent-project-resources/${aws:PrincipalTag/Project}/*
-```
+Policies live in AgentCore Policy Engine; Gateway runs in `ENFORCE` for acceptance.
 
 ## Tool ↔ action matrix
 
 | Tool | Allowed side effects |
 | --- | --- |
 | `inspect_repository` | Read GitHub repo files / tree |
-| `update_documentation` | Edit docs paths only (e.g. `README*`, `docs/**`) — enforce in tool |
-| `modify_source_code` | Edit non-doc source paths |
-
-DocumentationDeveloper without `modify_source_code` must fail closed on source paths even if prompt asks.
+| `update_documentation` | Edit docs paths only (e.g. `README*`, `docs/**`) — also enforce in tool |
+| `modify_source_code` | Edit non-doc source paths — **blocked by Cedar** in primary demo |
 
 ## Traceability chain
 
 ```text
-Cognito sub ↔ GitHub user id ↔ Issue #N ↔ Agent session ↔ STS RoleSessionName ↔ PR URL
+Cognito sub ↔ GitHub user id ↔ Issue #N ↔ Agent session ↔ Cedar decision ↔ PR URL
 ```
 
-All five **SHOULD** appear in logs for a successful demo run (no secrets).
+All of the above **SHOULD** appear in logs for a successful demo run (no secrets).

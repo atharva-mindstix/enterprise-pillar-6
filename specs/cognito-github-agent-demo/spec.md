@@ -2,7 +2,7 @@
 
 **Status:** Proposed (not yet implemented)  
 **Target:** `githubpoc` — runtime `githubWorkflow`  
-**Persona:** Priya — claim `role=DocumentationDeveloper`, project `AgentDemo`
+**Persona:** Priya — Cognito user; documentation task on repo `agent-demo`
 
 ## Purpose
 
@@ -11,16 +11,15 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 - user identity propagation (Cognito)
 - acting on behalf of a user (GitHub OAuth via AgentCore Identity)
 - agent workload identity
-- tool-level RBAC
-- AWS ABAC via STS session tags
-- temporary elevated AWS access (AssumeRole)
+- **tool-level RBAC via AgentCore Gateway + Cedar policies**
 
-## Out of scope
+## Out of scope (this POC)
 
 - Multiple specialized agents / orchestrator
 - Full product UI polish beyond demo screens
-- Permanent AWS credentials for project data
-- Trusting client-supplied role/project claims
+- Cognito `role` / `project` claims driving tool allowlists in application code
+- **ABAC via STS session tags + S3** (deferred — see `design.md`)
+- Trusting client-supplied authorization overrides
 
 ---
 
@@ -29,7 +28,7 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 ### R1 — Cognito authentication
 
 1. The UI **SHALL** provide **Sign in with Cognito**.
-2. After login, the UI **SHALL** display at least: user email (or username), role, and project derived from verified claims (or server mapping).
+2. After login, the UI **SHALL** display at least: user email (or username) and Cognito `sub` from verified claims.
 3. The UI **SHALL** send the Cognito access token (or ID token as configured by inbound authorizer) to AgentCore Runtime.
 4. AgentCore **SHALL** validate JWT issuer, audience, client, scopes, and claims via inbound JWT authorizer.
 5. On success, the system **SHALL** obtain a workload access token via `GetWorkloadAccessTokenForJWT` representing the agent workload and Cognito user.
@@ -64,25 +63,23 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 
 ### R5 — User-context propagation
 
-1. Verified claims **SHALL** include at least:
+1. Verified identity claims **SHALL** include at least:
 
 ```json
 {
   "sub": "cognito-user-123",
   "email": "developer@example.com",
-  "role": "DocumentationDeveloper",
-  "project": "AgentDemo",
-  "environment": "dev",
   "github_user_id": "987654"
 }
 ```
 
-2. `role` **SHALL** be a verified custom claim on the Cognito JWT (custom attribute and/or pre-token-generation Lambda). **Do not** use Cognito groups (`cognito:groups`) for RBAC. Mapping from `role` → tool set is defined in R6.
-3. Propagation path **SHALL** be: Cognito JWT → workload token → agent session → tool auth → STS tags → GitHub/AWS actions.
+2. `github_user_id` **MAY** be absent until Connect GitHub completes; then it **SHALL** come from the server-side mapping (not the browser).
+3. Propagation path **SHALL** be: Cognito JWT → workload token → agent session → Gateway tool invoke → Cedar allow/deny → GitHub actions.
+4. **Do not** use Cognito groups (`cognito:groups`) or a Cognito `role` claim as the RBAC mechanism for this POC. Tool RBAC is R6 (Cedar).
 
-### R6 — Agent-level RBAC (three tools)
+### R6 — Agent tool RBAC (Cedar on Gateway)
 
-1. The agent **SHALL** expose exactly these tools (names fixed for the demo):
+1. The agent / Gateway **SHALL** expose exactly these tools (names fixed for the demo):
 
 | Tool | Purpose |
 | --- | --- |
@@ -90,67 +87,36 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 | `update_documentation` | Change docs (e.g. README) |
 | `modify_source_code` | Change application source |
 
-2. Verified `role` claim → allowed tools:
+2. Tool authorization **SHALL** be enforced by an **AgentCore Policy Engine** with **Cedar** policies attached to the Gateway (`ENFORCE` mode for the accepted demo; `LOG_ONLY` allowed during bring-up).
+3. Demo policy intent (normative for acceptance):
 
-| `role` claim | Allowed tools |
+| Tool | Cedar decision (POC documentation agent) |
 | --- | --- |
-| `Viewer` | `inspect_repository` |
-| `DocumentationDeveloper` | `inspect_repository`, `update_documentation` |
-| `Developer` | all three |
+| `inspect_repository` | **permit** |
+| `update_documentation` | **permit** |
+| `modify_source_code` | **forbid** (or not permitted) |
 
-3. Tool set **SHALL** be constructed from verified role at agent build/invoke time (not from the model’s choice).
-4. Denied tools **MUST NOT** be available to the model for that session.
-5. Backend enforcement **SHALL** also reject unauthorized tool execution if invoked (Gateway policy and/or in-tool guard). Prompt text alone is insufficient.
+4. Cedar uses default-deny; `forbid` overrides `permit`. Prompt text and “don’t register the tool in Python” alone are **insufficient** as the security boundary — Gateway + Cedar **SHALL** reject unauthorized tool execution.
+5. The model **MUST NOT** successfully execute `modify_source_code` for the primary demo path.
 
-### R7 — ABAC for project AWS resources
+### R7 — Deferred: ABAC for AWS project resources
 
-1. Project data **SHALL** live under S3 prefix layout:
+**Not in scope for the current POC.** Do not implement S3 prefix ABAC / STS session tags until a later phase.
 
-```text
-s3://agent-project-resources/
-  AgentDemo/
-    coding-standards.md
-    repository-config.json
-    task-results/
-  ProjectB/
-    coding-standards.md
-    repository-config.json
-    task-results/
-```
+Placeholder (for later agreement): project-scoped AWS access via AssumeRole + `aws:PrincipalTag/Project`, or agent-level Cedar conditions on attributes (path / repo / task type) without S3. See `design.md` → Deferred ABAC.
 
-2. On task start, the agent **SHALL** AssumeRole into `GitHubTaskExecutionRole` with session tags at least:
+### R8 — Deferred: STS AssumeRole in the workflow
 
-| Tag | Example |
-| --- | --- |
-| `Project` | `AgentDemo` |
-| `Environment` | `dev` |
-| `UserId` | Cognito `sub` |
-| `Role` | `DocumentationDeveloper` |
-
-3. IAM on the task role **SHALL** allow S3 Get/Put only on:
-
-```text
-arn:aws:s3:::agent-project-resources/${aws:PrincipalTag/Project}/*
-```
-
-4. Same role + policy for all projects; only session tags change (ABAC demonstration).
-
-### R8 — STS AssumeRole in the single-agent workflow
-
-1. Runtime role `GitHubAgentRuntimeRole` **SHALL** have permission to assume `GitHubTaskExecutionRole` and tag the session; it **SHALL NOT** have direct project S3 access.
-2. Trust policy on `GitHubTaskExecutionRole` **SHALL** allow `sts:AssumeRole` and `sts:TagSession` from the runtime role.
-3. Role session name **SHOULD** include issue id and user id (e.g. `issue-24-user-123`) for CloudTrail clarity.
-4. Temporary credentials **SHALL** be used only for AWS resource access during the task; GitHub remains OAuth-based.
+**Not in scope for the current POC.** GitHub remains OAuth-based; no requirement to AssumeRole for task execution in this phase.
 
 ### R9 — End-to-end agent outcome
 
-Given a DocumentationDeveloper task to update README:
+Given a documentation task to update README:
 
-1. Agent **SHALL** be able to `inspect_repository` and `update_documentation`.
-2. Agent **SHALL** read `AgentDemo/coding-standards.md` via tagged STS credentials.
-3. Agent **SHALL NOT** successfully read `ProjectB/coding-standards.md`.
-4. Agent **SHALL** update the repository documentation and create a pull request.
-5. Observability: activity **SHOULD** be visible in CloudTrail / CloudWatch / GitHub as applicable.
+1. Agent **SHALL** be able to invoke `inspect_repository` and `update_documentation` (Cedar permit).
+2. Agent **SHALL NOT** successfully invoke `modify_source_code` (Cedar forbid / deny).
+3. Agent **SHALL** update the repository documentation and create a pull request.
+4. Observability: activity **SHOULD** be visible in CloudWatch / GitHub (and CloudTrail where applicable).
 
 ### R10 — UI surface (minimum)
 
@@ -158,8 +124,7 @@ After Cognito login the UI **SHALL** show:
 
 ```text
 Welcome, <email>
-Role: <role>
-Project: <project>
+sub: <sub>
 
 [Connect GitHub]
 [Create Agent Task]
@@ -167,10 +132,12 @@ Project: <project>
 
 Sign-in CTA before login: `[Sign in with Cognito]`.
 
+Optional: show Cedar / Gateway policy summary for the demo (e.g. “docs tools allowed; source tool denied”) — not required.
+
 ---
 
 ## Non-functional
 
 1. POC-quality: minimal UI, clear demo scripts, no product chrome.
-2. Fail closed: missing/invalid JWT, missing GitHub link, or unknown role → deny, do not default to Developer.
-3. Logging: include Cognito `sub`, issue number, assumed role session name, and allowed tool set (no secrets).
+2. Fail closed: missing/invalid JWT or missing GitHub link → deny; Cedar default-deny for tools.
+3. Logging: include Cognito `sub`, issue number, tool name, Cedar allow/deny decision, and PR URL (no secrets).
