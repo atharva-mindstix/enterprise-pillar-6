@@ -19,8 +19,11 @@ import requests
 AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 TOKEN_URL = "https://github.com/login/oauth/access_token"
 API = "https://api.github.com"
+_DATA = Path(__file__).resolve().parents[1] / ".data"
 # Cognito sub → GitHub identity (no access token on disk)
-_LINKS_PATH = Path(__file__).resolve().parents[1] / ".data" / "github_links.json"
+_LINKS_PATH = _DATA / "github_links.json"
+# OAuth state → Cognito session (survives Streamlit session loss on redirect)
+_PENDING_PATH = _DATA / "oauth_pending.json"
 
 
 def _cfg() -> dict[str, str]:
@@ -46,6 +49,36 @@ def _cfg() -> dict[str, str]:
 
 def new_oauth_state() -> str:
     return secrets.token_urlsafe(24)
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def save_pending_oauth(state: str, *, cognito_sub: str, id_token: str, email: str) -> None:
+    # ponytail: short-lived id_token on disk so GitHub redirect can restore Cognito
+    # if Streamlit session resets; upgrade: AgentCore callback + workload session.
+    pending = _read_json(_PENDING_PATH)
+    pending[state] = {
+        "cognito_sub": cognito_sub,
+        "id_token": id_token,
+        "email": email,
+    }
+    _write_json(_PENDING_PATH, pending)
+
+
+def pop_pending_oauth(state: str) -> dict[str, Any] | None:
+    pending = _read_json(_PENDING_PATH)
+    row = pending.pop(state, None)
+    _write_json(_PENDING_PATH, pending)
+    return row
 
 
 def authorize_url(state: str) -> str:
@@ -102,23 +135,17 @@ def fetch_github_user(access_token: str) -> dict[str, Any]:
 
 
 def save_link(cognito_sub: str, github_user: dict[str, Any]) -> None:
-    _LINKS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    links: dict[str, Any] = {}
-    if _LINKS_PATH.exists():
-        links = json.loads(_LINKS_PATH.read_text(encoding="utf-8"))
+    links = _read_json(_LINKS_PATH)
     links[cognito_sub] = {
         "cognito_sub": cognito_sub,
         "github_user_id": github_user["github_user_id"],
         "github_login": github_user["github_login"],
     }
-    _LINKS_PATH.write_text(json.dumps(links, indent=2) + "\n", encoding="utf-8")
+    _write_json(_LINKS_PATH, links)
 
 
 def load_link(cognito_sub: str) -> dict[str, Any] | None:
-    if not _LINKS_PATH.exists():
-        return None
-    links = json.loads(_LINKS_PATH.read_text(encoding="utf-8"))
-    return links.get(cognito_sub)
+    return _read_json(_LINKS_PATH).get(cognito_sub)
 
 
 def resolve_repo(repo: str, github_login: str) -> tuple[str, str]:

@@ -12,6 +12,13 @@ from github_oauth import authorize_url, new_oauth_state, resolve_repo  # noqa: E
 assert resolve_repo("agent-demo", "alice") == ("alice", "agent-demo")
 assert resolve_repo("acme/agent-demo", "alice") == ("acme", "agent-demo")
 
+from github_oauth import pop_pending_oauth, save_pending_oauth  # noqa: E402
+
+save_pending_oauth("state-test", cognito_sub="sub-1", id_token="tok", email="a@b.c")
+row = pop_pending_oauth("state-test")
+assert row and row["cognito_sub"] == "sub-1"
+assert pop_pending_oauth("state-test") is None
+
 if os.getenv("GITHUB_CLIENT_ID", "").strip():
     state = new_oauth_state()
     url = authorize_url(state)

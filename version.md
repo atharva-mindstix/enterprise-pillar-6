@@ -64,3 +64,7 @@ Running append-only changelog of code changes in this project.
 
 - Added `ui/github_oauth.py` + Connect GitHub OAuth callback; creates real `agent-task` issues; Cognito↔GitHub map in `.data/`
 - Env: `GITHUB_CLIENT_*` in `.env.shared` / example; UI README setup steps (AgentCore federation still the later upgrade)
+
+## 2026-07-21 16:57 +05:30 — Fix GitHub OAuth session loss
+
+- Persist OAuth pending state (Cognito sub + id_token) under `.data/` so callback restores login after GitHub redirect

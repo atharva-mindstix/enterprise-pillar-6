@@ -24,8 +24,10 @@ from github_oauth import (
     fetch_github_user,
     load_link,
     new_oauth_state,
+    pop_pending_oauth,
     resolve_repo,
     save_link,
+    save_pending_oauth,
 )
 
 
@@ -49,20 +51,37 @@ def _handle_github_callback() -> None:
     state = st.query_params.get("state")
     if not code or not state:
         return
-    expected = st.session_state.github_oauth_state
-    user = st.session_state.user
     # Clear URL params either way so refresh doesn't re-exchange
     st.query_params.clear()
-    if not user:
-        st.session_state.github_error = "Sign in with Cognito before completing GitHub OAuth."
+
+    pending = pop_pending_oauth(state)
+    if not pending:
+        st.session_state.github_error = (
+            "GitHub OAuth state expired or unknown — sign in and Connect GitHub again."
+        )
         return
-    if not expected or state != expected:
-        st.session_state.github_error = "GitHub OAuth state mismatch — try Connect GitHub again."
+
+    # Restore Cognito session if Streamlit lost it on the redirect round-trip
+    if not st.session_state.user:
+        try:
+            claims = verify_id_token(pending["id_token"])
+            st.session_state.user = user_from_claims(claims)
+            st.session_state.id_token = pending["id_token"]
+        except Exception as exc:  # noqa: BLE001
+            st.session_state.github_error = (
+                f"Could not restore Cognito session after GitHub redirect: {exc}. "
+                "Sign in again, then Connect GitHub."
+            )
+            return
+
+    if st.session_state.user["sub"] != pending["cognito_sub"]:
+        st.session_state.github_error = "GitHub OAuth was started for a different Cognito user."
         return
+
     try:
         token = exchange_code(code)
         gh_user = fetch_github_user(token)
-        save_link(user["sub"], gh_user)
+        save_link(st.session_state.user["sub"], gh_user)
         st.session_state.github_token = token
         st.session_state.github_user = gh_user
         st.session_state.github_connected = True
@@ -73,7 +92,6 @@ def _handle_github_callback() -> None:
         st.session_state.github_connected = False
         st.session_state.github_token = None
         st.session_state.github_user = None
-
 
 def sign_in_page() -> None:
     st.title("Agent Demo")
@@ -151,10 +169,19 @@ def home_page(user: dict) -> None:
                 "Token stays in server session only (not written to disk)."
             )
             try:
-                if not st.session_state.github_oauth_state:
-                    st.session_state.github_oauth_state = new_oauth_state()
-                url = authorize_url(st.session_state.github_oauth_state)
-                st.link_button("Connect GitHub", url, type="primary")
+                if not st.session_state.id_token:
+                    st.warning("Missing Cognito ID token — sign out and sign in again.")
+                else:
+                    if not st.session_state.github_oauth_state:
+                        st.session_state.github_oauth_state = new_oauth_state()
+                    save_pending_oauth(
+                        st.session_state.github_oauth_state,
+                        cognito_sub=user["sub"],
+                        id_token=st.session_state.id_token,
+                        email=user["email"],
+                    )
+                    url = authorize_url(st.session_state.github_oauth_state)
+                    st.link_button("Connect GitHub", url, type="primary")
             except Exception as exc:  # noqa: BLE001
                 st.warning(str(exc))
 
