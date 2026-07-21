@@ -72,18 +72,8 @@ def sign_in_page() -> None:
 def home_page(user: dict) -> None:
     st.title("Agent Demo")
     st.subheader(f"Welcome, {user['email']}")
-    role = user.get("role") or "(not in token — set custom claim `role`)"
-    st.markdown(
-        f"**Role:** `{role}`  \n"
-        f"**Project:** `{user['project']}`  \n"
-        f"**Environment:** `{user['environment']}`  \n"
-        f"**sub:** `{user['sub']}`"
-    )
-    if not user.get("role"):
-        st.warning(
-            "JWT has no `role` / `custom:role` claim. "
-            "Add it on the Cognito user (custom attribute or pre-token Lambda)."
-        )
+    st.markdown(f"**sub:** `{user['sub']}`")
+    st.caption("Tool RBAC is Cedar on the AgentCore Gateway (not Cognito role claims).")
 
     with st.expander("Verified ID token claims"):
         st.json(user.get("claims") or {})
@@ -113,9 +103,6 @@ def home_page(user: dict) -> None:
 
     st.divider()
     st.subheader("Create Agent Task")
-    if not user.get("role"):
-        st.error("Cannot create task without a verified role claim (fail closed).")
-        return
     if not st.session_state.github_connected:
         st.info("Connect GitHub before creating a task.")
         return
@@ -144,8 +131,6 @@ def home_page(user: dict) -> None:
             "task": task.strip(),
             "task_type": task_type,
             "cognito_sub": user["sub"],
-            "role": user["role"],
-            "project": user["project"],
             "label": "agent-task",
         }
         st.session_state.last_issue = issue

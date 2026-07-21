@@ -110,18 +110,8 @@ def verify_id_token(id_token: str) -> dict[str, Any]:
 
 
 def user_from_claims(claims: dict[str, Any]) -> dict[str, Any]:
-    role = claims.get("role") or claims.get("custom:role") or ""
-    project = claims.get("project") or claims.get("custom:project") or "AgentDemo"
-    environment = (
-        claims.get("environment")
-        or claims.get("custom:environment")
-        or os.getenv("ENVIRONMENT_CLAIM", "dev")
-    )
     return {
         "sub": claims["sub"],
         "email": claims.get("email") or claims.get("cognito:username") or claims["sub"],
-        "role": role,
-        "project": project,
-        "environment": environment,
         "claims": claims,
     }
