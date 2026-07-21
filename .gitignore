@@ -1,0 +1,6 @@
+# Repo root secrets / local contract
+.env
+.env.*
+!.env*.example
+specs/**/.env.shared
+!.env.shared.example

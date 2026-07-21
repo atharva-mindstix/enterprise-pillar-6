@@ -13,3 +13,11 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 14:10 +05:30 — Changelog entries include time
 
 - Updated `version-changelog.mdc` entry format to `YYYY-MM-DD HH:MM ±HH:MM`; aligned existing `version.md` headings
+
+## 2026-07-21 14:48 +05:30 — Dev 1 / Dev 2 parallel tasklist
+
+- Added `specs/cognito-github-agent-demo/dev-split.md` with independent Dev 1 (identity/UI/GitHub) and Dev 2 (IAM/S3/STS/agent) checklists plus integration pass
+
+## 2026-07-21 14:56 +05:30 — Shared contract env file
+
+- Added `.env.shared` + `.env.shared.example` for Day-0 shared contract; gitignore local env; pointed `dev-split.md` at the env file

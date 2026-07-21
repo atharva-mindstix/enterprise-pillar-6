@@ -2,6 +2,8 @@
 
 Work top-to-bottom. Check boxes only when the acceptance scenarios that depend on the task can pass. **Do not implement until specs are agreed**; this file is the queue.
 
+**Two developers?** Use [`dev-split.md`](./dev-split.md) for parallel Dev 1 / Dev 2 ownership. This file remains the full ordered backlog.
+
 ## Phase 0 — Spec lock
 
 - [ ] Confirm constitution + `spec.md` with stakeholders
