@@ -17,21 +17,20 @@ Minimum claim set after verification:
 | --- | --- | --- |
 | `sub` | Cognito | Primary user id |
 | `email` | Cognito | Display in UI |
-| `cognito:groups` | Cognito groups | Map to RBAC role |
-| `role` | Derived from groups or custom claim | Canonical demo values below |
+| `role` | Custom claim (attribute / pre-token Lambda) | RBAC; **not** from Cognito groups |
 | `project` | Custom claim or server mapping | e.g. `AgentDemo` |
 | `environment` | Custom claim or server mapping | e.g. `dev` |
 | `github_user_id` | Set after Connect GitHub / mapping | Optional until GitHub linked |
 
-### Canonical roles (Cognito groups)
+### Canonical `role` values
 
-| Group name | RBAC role string |
+| `role` | Meaning |
 | --- | --- |
-| `Viewer` | `Viewer` |
-| `DocumentationDeveloper` | `DocumentationDeveloper` |
-| `Developer` | `Developer` |
+| `Viewer` | Read-only repo inspect |
+| `DocumentationDeveloper` | Inspect + docs updates (demo persona) |
+| `Developer` | All tools including source changes |
 
-If a user is in multiple groups, POC rule: **highest privilege wins** (`Developer` > `DocumentationDeveloper` > `Viewer`). Document any change in `spec.md` before coding.
+Do **not** use Cognito groups or `cognito:groups` for authorization.
 
 ## Server-side mapping (Connect GitHub)
 

@@ -25,3 +25,7 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 15:28 +05:30 — Minimal shared env
 
 - Slimmed `.env.shared` / example to AWS + Cognito + optional `AGENTCORE_GATEWAY_ARN` + dev owners; other names stay as spec defaults
+
+## 2026-07-21 15:40 +05:30 — Remove Cognito group RBAC from specs
+
+- Specs now use verified custom `role` claim only (no `cognito:groups`); updated spec, design, data-model, tasks, acceptance, and dev-split

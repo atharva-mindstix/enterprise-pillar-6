@@ -7,7 +7,7 @@ These scenarios are the definition of done for the POC. All must pass with **Pri
 | Attribute | Value |
 | --- | --- |
 | Cognito user | Priya |
-| Group / role | `DocumentationDeveloper` |
+| Role claim | `DocumentationDeveloper` |
 | Project | `AgentDemo` |
 | Environment | `dev` |
 | Repository | `agent-demo` |
@@ -123,4 +123,4 @@ Use this as the live demo script:
 | No / invalid Cognito JWT | Runtime rejects; no workload token |
 | Cognito signed in but GitHub not connected | Cannot create issue / cannot run GitHub tools |
 | Browser sends `role=Developer` while JWT is DocumentationDeveloper | Ignored; tools stay DocumentationDeveloper |
-| Unknown Cognito group | Fail closed (no tools / deny) |
+| Unknown / missing `role` claim | Fail closed (no tools / deny) |

@@ -7,18 +7,17 @@ Work top-to-bottom. Check boxes only when the acceptance scenarios that depend o
 ## Phase 0 — Spec lock
 
 - [ ] Confirm constitution + `spec.md` with stakeholders
-- [ ] Confirm Cognito pool/groups and custom claim strategy (groups vs pre-token Lambda)
+- [ ] Confirm Cognito custom claim strategy for `role` / `project` / `environment` (custom attrs or pre-token Lambda — **no Cognito groups**)
 - [ ] Confirm AWS account, region, demo repo `agent-demo`, bucket name
 
 ## Phase 1 — Identity (Cognito + AgentCore JWT)
 
 - [ ] Create/configure Cognito User Pool + app client + Hosted UI (or SDK)
-- [ ] Create groups: `Viewer`, `DocumentationDeveloper`, `Developer`
-- [ ] Create demo user Priya in `DocumentationDeveloper`; set project/environment claims
+- [ ] Define custom attributes or token claims: `role`, `project`, `environment`
+- [ ] Create demo user Priya with `role=DocumentationDeveloper`, `project=AgentDemo`, `environment=dev`
 - [ ] Configure AgentCore Runtime inbound JWT authorizer (issuer, audience, client, scopes)
 - [ ] Wire `GetWorkloadAccessTokenForJWT` path for authenticated invokes
 - [ ] Verify: invalid JWT rejected; valid JWT yields workload token
-
 ## Phase 2 — GitHub OAuth via AgentCore Identity
 
 - [ ] Register GitHub OAuth App; configure AgentCore GitHub credential provider
@@ -49,7 +48,7 @@ Work top-to-bottom. Check boxes only when the acceptance scenarios that depend o
 - [ ] Implement `inspect_repository`
 - [ ] Implement `update_documentation` (docs paths only)
 - [ ] Implement `modify_source_code`
-- [ ] Map Cognito group/role → tool list at agent construction
+- [ ] Map verified `role` claim → tool list at agent construction
 - [ ] In-tool or Gateway deny for unauthorized tools
 - [ ] Verify DocumentationDeveloper cannot call `modify_source_code`
 

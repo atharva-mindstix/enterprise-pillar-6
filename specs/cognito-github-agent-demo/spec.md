@@ -2,7 +2,7 @@
 
 **Status:** Proposed (not yet implemented)  
 **Target:** `githubpoc` — runtime `githubWorkflow`  
-**Persona:** Priya — Cognito group `DocumentationDeveloper`, project `AgentDemo`
+**Persona:** Priya — claim `role=DocumentationDeveloper`, project `AgentDemo`
 
 ## Purpose
 
@@ -77,7 +77,7 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 }
 ```
 
-2. `role` **SHALL** come from Cognito groups (`cognito:groups`) and/or custom claims (e.g. pre-token-generation Lambda). Mapping from group → tool set is defined in R6.
+2. `role` **SHALL** be a verified custom claim on the Cognito JWT (custom attribute and/or pre-token-generation Lambda). **Do not** use Cognito groups (`cognito:groups`) for RBAC. Mapping from `role` → tool set is defined in R6.
 3. Propagation path **SHALL** be: Cognito JWT → workload token → agent session → tool auth → STS tags → GitHub/AWS actions.
 
 ### R6 — Agent-level RBAC (three tools)
@@ -90,9 +90,9 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 | `update_documentation` | Change docs (e.g. README) |
 | `modify_source_code` | Change application source |
 
-2. Cognito group → allowed tools:
+2. Verified `role` claim → allowed tools:
 
-| Cognito group | Allowed tools |
+| `role` claim | Allowed tools |
 | --- | --- |
 | `Viewer` | `inspect_repository` |
 | `DocumentationDeveloper` | `inspect_repository`, `update_documentation` |

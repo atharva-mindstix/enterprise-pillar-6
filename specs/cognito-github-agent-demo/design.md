@@ -27,7 +27,7 @@ Agent updates repository and creates PR
 | Component | Responsibility |
 | --- | --- |
 | **Demo UI** | Cognito Hosted UI / SDK login; Connect GitHub; Create Agent Task form; display role/project |
-| **Cognito User Pool** | Users, groups (`Viewer`, `DocumentationDeveloper`, `Developer`), optional custom claims |
+| **Cognito User Pool** | Users + custom claims (`role`, `project`, `environment`) — no Cognito groups for RBAC |
 | **AgentCore Runtime** (`githubWorkflow`) | JWT inbound auth; agent invoke; tool execution |
 | **AgentCore Identity** | `GetWorkloadAccessTokenForJWT`; GitHub OAuth provider; `GetResourceOauth2Token` |
 | **Agent app** (`app/githubWorkflow`) | Build agent with role-filtered tools; AssumeRole; run task; GitHub PR |
@@ -87,7 +87,7 @@ STS session tags (ABAC)
 GitHub task + AWS resource access
 ```
 
-Claims source: Cognito access/ID token (`sub`, `email`, `cognito:groups`, custom `project` / `environment` / `github_user_id` as configured). Prefer [Cognito groups](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-user-groups.html) and optional pre-token-generation Lambda for custom claims.
+Claims source: Cognito access/ID token (`sub`, `email`, custom `role` / `project` / `environment` / `github_user_id` as configured). Put `role` on the token via custom attributes or a pre-token-generation Lambda. **Do not** use Cognito groups (`cognito:groups`) for tool authorization.
 
 **Do not** accept role/project overrides from request body without matching verified JWT.
 

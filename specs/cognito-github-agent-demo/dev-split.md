@@ -63,13 +63,12 @@ JWT issuer (not stored): `https://cognito-idp.${AWS_REGION}.amazonaws.com/${COGN
 
 ### D1-A — Cognito (independent)
 
-- [ ] D1-A1 Create Cognito User Pool + app client + Hosted UI (or Amplify/SDK config)
-- [ ] D1-A2 Create groups: `Viewer`, `DocumentationDeveloper`, `Developer`
-- [ ] D1-A3 Create user **Priya** in `DocumentationDeveloper`
-- [ ] D1-A4 Set `project=AgentDemo`, `environment=dev` (custom attributes / pre-token Lambda / group→claim — pick one, document in PR)
+- [ ] D1-A1 Create Cognito User Pool + app client + Hosted UI (or Amplify/SDK config) — skip if pool already in `.env.shared`
+- [ ] D1-A2 Define custom attributes / token claims: `role`, `project`, `environment` (**no Cognito groups**)
+- [ ] D1-A3 Create user **Priya** with `role=DocumentationDeveloper`, `project=AgentDemo`, `environment=dev`
+- [ ] D1-A4 Document how claims land on the JWT (custom attr vs pre-token Lambda)
 - [ ] D1-A5 Export: issuer URL, audience/client id, JWKS — hand to Dev 2 for runtime JWT config
-- [ ] D1-A6 Verify: can sign in and decode JWT with expected claims/groups
-
+- [ ] D1-A6 Verify: can sign in and decode JWT with expected `role` / `project` / `environment`
 
 
 ### D1-B — AgentCore JWT + workload token (mostly independent; needs Dev 2 runtime present or local stub)
@@ -144,7 +143,7 @@ JWT issuer (not stored): `https://cognito-idp.${AWS_REGION}.amazonaws.com/${COGN
 - [ ] D2-B1 Implement `inspect_repository` (GitHub token via env/fixture until Dev 1 wiring)
 - [ ] D2-B2 Implement `update_documentation` (docs paths only)
 - [ ] D2-B3 Implement `modify_source_code`
-- [ ] D2-B4 Role → tools map at agent construction (`Viewer` / `DocumentationDeveloper` / `Developer`)
+- [ ] D2-B4 `role` claim → tools map at agent construction (`Viewer` / `DocumentationDeveloper` / `Developer`)
 - [ ] D2-B5 Backend deny if unauthorized tool invoked (not prompt-only)
 - [ ] D2-B6 Unit/self-check: DocumentationDeveloper never gets `modify_source_code`
 
