@@ -153,3 +153,8 @@ Running append-only changelog of code changes in this project.
 
 - `github_oauth._read_json` now uses `utf-8-sig` so Windows-BOM `.data/*.json` files parse
 - Stripped BOM from `.data/oauth_claimed.json` (was failing Connect GitHub callback claim)
+
+## 2026-07-22 21:54 +05:30 — Create Task invokes agent
+
+- After GitHub issue create, UI calls `invoke_runtime_with_jwt` with issue/session payload
+- Added `agent_task_payload` + longer invoke timeout; `ui/check_task_invoke.py` self-check

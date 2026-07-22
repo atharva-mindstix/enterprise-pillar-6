@@ -2,7 +2,7 @@
 Demo UI for Cognito + GitHub Agent POC (spec R10).
 
 Custom login → Cognito → Connect GitHub (AgentCore Identity USER_FEDERATION)
-→ Create Agent Task (GitHub issue via vaulted token).
+→ Create Agent Task (GitHub issue) → invoke githubWorkflow runtime.
 """
 
 from __future__ import annotations
@@ -19,10 +19,12 @@ load_dotenv(ROOT / ".env.shared", override=True)
 import streamlit as st
 
 from agentcore_identity import (
+    agent_task_payload,
     complete_github_oauth_session,
     get_github_access_token,
     get_workload_access_token_for_jwt,
     github_provider_name,
+    invoke_runtime_with_jwt,
     jwt_authorizer_config,
     oauth2_return_url,
     start_github_oauth,
@@ -58,6 +60,7 @@ def _init_state() -> None:
     ss.setdefault("github_auth_url", None)
     ss.setdefault("github_session_uri", None)
     ss.setdefault("last_issue", None)
+    ss.setdefault("last_agent_result", None)
     ss.setdefault("auth_error", None)
     ss.setdefault("github_error", None)
     ss.setdefault("_oauth_callback_claimed", None)
@@ -413,6 +416,7 @@ def home_page(user: dict) -> None:
             st.session_state.github_session_uri = None
             st.session_state._oauth_callback_claimed = None
             st.session_state.last_issue = None
+            st.session_state.last_agent_result = None
             st.session_state.auth_error = None
             st.session_state.github_error = None
             st.rerun()
@@ -443,6 +447,9 @@ def home_page(user: dict) -> None:
         if not repo.strip() or not task.strip():
             st.error("Repository and Task are required.")
             return
+        if not st.session_state.access_token:
+            st.error("Missing Cognito AccessToken — sign out and sign in again.")
+            return
         title = task.strip().splitlines()[0][:80]
         body = (
             f"{task.strip()}\n\n"
@@ -465,17 +472,57 @@ def home_page(user: dict) -> None:
             issue["task"] = task.strip()
             issue["task_type"] = task_type
             st.session_state.last_issue = issue
+            st.session_state.last_agent_result = None
             st.success(
                 f"Created issue **#{issue['number']}** on `{issue['repo']}` — "
                 f"[open on GitHub]({issue['html_url']})"
             )
             st.json(issue)
+
+            payload = agent_task_payload(
+                task=task.strip(),
+                task_type=task_type,
+                repo=issue["repo"],
+                issue_number=issue["number"],
+                sub=user["sub"],
+                email=user["email"],
+            )
+            # Session id must be long enough for AgentCore Runtime
+            session_id = f"{user['sub']}-issue-{issue['number']}"
+            with st.spinner("Invoking agent on this issue…"):
+                resp = invoke_runtime_with_jwt(
+                    st.session_state.access_token,
+                    payload,
+                    session_id=session_id,
+                )
+            if resp.status_code >= 400:
+                raise RuntimeError(
+                    f"Agent invoke failed ({resp.status_code}): {resp.text}"
+                )
+            try:
+                agent_body = resp.json()
+            except Exception:  # noqa: BLE001
+                agent_body = {"raw": resp.text}
+            st.session_state.last_agent_result = agent_body
+            result_text = (
+                agent_body.get("result")
+                if isinstance(agent_body, dict)
+                else None
+            )
+            st.success("Agent finished")
+            if result_text:
+                st.markdown(result_text)
+            else:
+                st.json(agent_body)
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))
 
     if st.session_state.last_issue and not submitted:
         st.caption("Last created issue")
         st.json(st.session_state.last_issue)
+    if st.session_state.last_agent_result and not submitted:
+        st.caption("Last agent result")
+        st.json(st.session_state.last_agent_result)
 
 
 def main() -> None:

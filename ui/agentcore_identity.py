@@ -215,11 +215,41 @@ def invoke_runtime_with_jwt(
     *,
     session_id: str = "d1b-verify-session",
     agent_runtime_arn: str | None = None,
+    timeout: float = 300,
 ) -> requests.Response:
     """POST /invocations with Cognito Bearer JWT (Runtime JWT authorizer path)."""
     return requests.post(
         invoke_url(agent_runtime_arn),
         headers=invoke_headers(cognito_access_token, session_id),
         json=payload,
-        timeout=60,
+        timeout=timeout,
     )
+
+
+def agent_task_payload(
+    *,
+    task: str,
+    task_type: str,
+    repo: str,
+    issue_number: int,
+    sub: str,
+    email: str,
+) -> dict[str, Any]:
+    """Body for githubWorkflow invoke after Create Agent Task."""
+    return {
+        "prompt": (
+            f"Complete GitHub issue #{issue_number} on {repo}.\n"
+            f"Task type: {task_type}\n"
+            f"Task:\n{task}\n\n"
+            "Use repository tools as needed. For documentation tasks, update the "
+            "README (or docs) to satisfy the task and open a pull request. "
+            "Do not modify application source code."
+        ),
+        "session": {
+            "sub": sub,
+            "email": email,
+            "repository": repo,
+            "issue_number": issue_number,
+            "task_type": task_type,
+        },
+    }
