@@ -1,0 +1,72 @@
+[
+  {
+    "name": "inspect_repository",
+    "description": "Read repository structure and file contents from GitHub.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner (user or organization)."
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional file or directory path. Omit to list the repository tree."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Optional git ref (branch, tag, or commit SHA)."
+        },
+        "path_filter": {
+          "type": "string",
+          "description": "Optional prefix filter when listing the tree (e.g. docs/)."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "When listing the tree, include nested paths (default true)."
+        }
+      },
+      "required": ["owner", "repo"]
+    }
+  },
+  {
+    "name": "update_documentation",
+    "description": "Create or update documentation files (README* and docs/** only).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": { "type": "string", "description": "Repository owner." },
+        "repo": { "type": "string", "description": "Repository name." },
+        "path": { "type": "string", "description": "Documentation file path (README* or docs/**)." },
+        "content": { "type": "string", "description": "Full new file content." },
+        "message": { "type": "string", "description": "Git commit message." },
+        "branch": { "type": "string", "description": "Target branch (created if missing)." },
+        "base_ref": { "type": "string", "description": "Base branch when creating a new branch." },
+        "issue_number": { "type": "integer", "description": "Optional issue number for branch naming." }
+      },
+      "required": ["owner", "repo", "path", "content", "message"]
+    }
+  },
+  {
+    "name": "modify_source_code",
+    "description": "Create or update non-documentation source files (for Cedar deny demo).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": { "type": "string", "description": "Repository owner." },
+        "repo": { "type": "string", "description": "Repository name." },
+        "path": { "type": "string", "description": "Source file path (not README* or docs/**)." },
+        "content": { "type": "string", "description": "Full new file content." },
+        "message": { "type": "string", "description": "Git commit message." },
+        "branch": { "type": "string", "description": "Target branch (created if missing)." },
+        "base_ref": { "type": "string", "description": "Base branch when creating a new branch." },
+        "issue_number": { "type": "integer", "description": "Optional issue number for branch naming." }
+      },
+      "required": ["owner", "repo", "path", "content", "message"]
+    }
+  }
+]

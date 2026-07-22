@@ -101,6 +101,7 @@ Running append-only changelog of code changes in this project.
 - Point `AGENTCORE_GITHUB_PROVIDER` / callback defaults at `pilllar-6-github` (new AgentCore callback UUID)
 - Updated `.env.shared`, example env, UI README, and githubpoc README
 
+<<<<<<< HEAD
 ## 2026-07-22 13:01 +05:30 — Clarify GitHub redirect_uri + better ClientError messages
 
 - Document that GitHub OAuth App callback must be the AgentCore URL (not localhost); UI caption updated
@@ -116,3 +117,13 @@ Running append-only changelog of code changes in this project.
 
 - Root cause: pool trigger `pillar6-lambda-function-agentcore` handler `lambda_function.lambda_handler` but zip had no `lambda_function` module
 - Deployed passthrough `lambda/lambda_function.py` via `update-function-code` so Cognito login works again
+=======
+## 2026-07-22 13:35 +05:30 — Gateway Lambda tools (single function)
+
+- Added `lambda/` package: `app.py` handler routes `inspect_repository`, `update_documentation`, and `modify_source_code`
+- `github_client.py` calls GitHub REST API; `tool_definitions.json` is the Gateway target schema reference
+
+## 2026-07-22 13:42 +05:30 — Consolidate Lambda into single file
+
+- Merged `tools.py`, `github_client.py`, and `paths.py` into `lambda/app.py`; removed split modules
+>>>>>>> d1d839780dd4d49ec70e2319564ab33e01cace1e
