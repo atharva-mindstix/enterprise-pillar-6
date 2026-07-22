@@ -447,8 +447,8 @@ def home_page(user: dict) -> None:
         if not repo.strip() or not task.strip():
             st.error("Repository and Task are required.")
             return
-        if not st.session_state.access_token:
-            st.error("Missing Cognito AccessToken — sign out and sign in again.")
+        if not st.session_state.access_token or not st.session_state.id_token:
+            st.error("Missing Cognito tokens — sign out and sign in again.")
             return
         title = task.strip().splitlines()[0][:80]
         body = (
@@ -489,9 +489,12 @@ def home_page(user: dict) -> None:
             )
             # Session id must be long enough for AgentCore Runtime
             session_id = f"{user['sub']}-issue-{issue['number']}"
+            # Runtime CUSTOM_JWT allowedAudience = app client id → Cognito IdToken aud
+            if not st.session_state.id_token:
+                raise RuntimeError("Missing Cognito IdToken — sign out and sign in again.")
             with st.spinner("Invoking agent on this issue…"):
                 resp = invoke_runtime_with_jwt(
-                    st.session_state.access_token,
+                    st.session_state.id_token,
                     payload,
                     session_id=session_id,
                 )

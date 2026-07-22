@@ -158,3 +158,8 @@ Running append-only changelog of code changes in this project.
 
 - After GitHub issue create, UI calls `invoke_runtime_with_jwt` with issue/session payload
 - Added `agent_task_payload` + longer invoke timeout; `ui/check_task_invoke.py` self-check
+
+## 2026-07-22 22:24 +05:30 — Invoke with Cognito IdToken
+
+- Runtime JWT aud check failed on AccessToken; Create Task invoke now uses IdToken
+- Updated invoke helper docs / ui README Bearer note

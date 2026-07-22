@@ -187,10 +187,14 @@ def get_github_access_token(
     return token
 
 
-def invoke_headers(cognito_access_token: str, session_id: str) -> dict[str, str]:
-    """Headers for JWT Bearer invoke of AgentCore Runtime (D1-B4)."""
+def invoke_headers(cognito_jwt: str, session_id: str) -> dict[str, str]:
+    """Headers for JWT Bearer invoke of AgentCore Runtime (D1-B4).
+
+    Use Cognito IdToken when authorizer allowedAudience is the app client id
+    (AccessToken has no matching aud → Claim 'aud' value mismatch).
+    """
     return {
-        "Authorization": f"Bearer {cognito_access_token}",
+        "Authorization": f"Bearer {cognito_jwt}",
         "Content-Type": "application/json",
         "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": session_id,
     }
@@ -210,17 +214,17 @@ def invoke_url(agent_runtime_arn: str | None = None, qualifier: str = "DEFAULT")
 
 
 def invoke_runtime_with_jwt(
-    cognito_access_token: str,
+    cognito_jwt: str,
     payload: dict[str, Any],
     *,
     session_id: str = "d1b-verify-session",
     agent_runtime_arn: str | None = None,
     timeout: float = 300,
 ) -> requests.Response:
-    """POST /invocations with Cognito Bearer JWT (Runtime JWT authorizer path)."""
+    """POST /invocations with Cognito Bearer JWT (prefer IdToken for aud check)."""
     return requests.post(
         invoke_url(agent_runtime_arn),
-        headers=invoke_headers(cognito_access_token, session_id),
+        headers=invoke_headers(cognito_jwt, session_id),
         json=payload,
         timeout=timeout,
     )

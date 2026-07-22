@@ -27,7 +27,7 @@ After Cognito login the UI calls `GetWorkloadAccessTokenForJWT` with the Cognito
 
 ```http
 POST https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{url-encoded-arn}/invocations?qualifier=DEFAULT
-Authorization: Bearer <Cognito AccessToken>
+Authorization: Bearer <Cognito IdToken>
 Content-Type: application/json
 X-Amzn-Bedrock-AgentCore-Runtime-Session-Id: <session-id>
 ```
@@ -36,7 +36,7 @@ Body example: `{"prompt": "hello", "session": {"sub": "...", "email": "..."}}`
 
 Notes:
 
-- Prefer **AccessToken** / **IdToken** that satisfy Cognito discovery + `allowedAudience` (app client id).
+- Prefer **IdToken** when `allowedAudience` is the app client id (AccessToken often fails with aud mismatch).
 - Do not put the workload token in the browser; keep it server-side (Streamlit session).
 - Runtime service-linked workloads cannot be exchanged via the data-plane API by the caller — AgentCore exchanges on Bearer invoke. The standalone workload `githubWorkflowUi` is for the UI path (JWT exchange + GitHub `USER_FEDERATION`).
 
