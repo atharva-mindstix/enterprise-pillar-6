@@ -101,7 +101,6 @@ Running append-only changelog of code changes in this project.
 - Point `AGENTCORE_GITHUB_PROVIDER` / callback defaults at `pilllar-6-github` (new AgentCore callback UUID)
 - Updated `.env.shared`, example env, UI README, and githubpoc README
 
-<<<<<<< HEAD
 ## 2026-07-22 13:01 +05:30 — Clarify GitHub redirect_uri + better ClientError messages
 
 - Document that GitHub OAuth App callback must be the AgentCore URL (not localhost); UI caption updated
@@ -117,7 +116,6 @@ Running append-only changelog of code changes in this project.
 
 - Root cause: pool trigger `pillar6-lambda-function-agentcore` handler `lambda_function.lambda_handler` but zip had no `lambda_function` module
 - Deployed passthrough `lambda/lambda_function.py` via `update-function-code` so Cognito login works again
-=======
 ## 2026-07-22 13:35 +05:30 — Gateway Lambda tools (single function)
 
 - Added `lambda/` package: `app.py` handler routes `inspect_repository`, `update_documentation`, and `modify_source_code`
@@ -125,5 +123,33 @@ Running append-only changelog of code changes in this project.
 
 ## 2026-07-22 13:42 +05:30 — Consolidate Lambda into single file
 
+
 - Merged `tools.py`, `github_client.py`, and `paths.py` into `lambda/app.py`; removed split modules
->>>>>>> d1d839780dd4d49ec70e2319564ab33e01cace1e
+
+## 2026-07-22 15:01 +05:30 — Harden CompleteResourceTokenAuth bind
+
+- Remint workload immediately before GetResourceOauth2Token; store bind_user_token in pending
+- Complete tries bind AccessToken, then IdToken, then userId/sub; use callback session_id
+- Disk claim file prevents double Complete across Streamlit session resets
+
+## 2026-07-22 15:18 +05:30 — Complete with IdToken only (no multi-retry)
+
+- AccessToken Complete returned ValidationException and burned the OAuth session; fallbacks then got Invalid or expired session
+- Bind mint + Complete + remint on the same Cognito IdToken (OIDC aud); single Complete attempt
+
+## 2026-07-22 15:51 +05:30 — Live Priya test + clearer Complete errors
+
+- Confirmed Cognito login + IdToken mint + GetResourceOauth2Token work; Complete pre-GitHub returns AccessDenied (expected)
+- CompleteResourceTokenAuth does not appear in CloudTrail Event history; errors now tagged per step + RequestId
+- Disk claim only after success; ValidationException retries pending sessionUri if it differs from callback
+
+## 2026-07-22 16:49 +05:30 — Complete diagnostics A/B/C harness
+
+- Added `ui/diag_complete_tests.py` (Test A userId, Test B isolated AccessToken, Test C provider)
+- Test C: `pilllar-6-github` READY; callback matches env; discovery issuer is `token.actions.githubusercontent.com` (suspicious)
+- Test A blocked by IAM on `GetWorkloadAccessTokenForUserId`; Test B phase-1 started (needs GitHub authorize + `--session-id`)
+
+## 2026-07-22 17:01 +05:30 — Fix OAuth JSON UTF-8 BOM crash
+
+- `github_oauth._read_json` now uses `utf-8-sig` so Windows-BOM `.data/*.json` files parse
+- Stripped BOM from `.data/oauth_claimed.json` (was failing Connect GitHub callback claim)

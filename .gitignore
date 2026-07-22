@@ -7,3 +7,4 @@ specs/**/.env.shared
 
 # Local Cognito↔GitHub mapping (no tokens)
 .data/
+ui/.diag_oauth_state.json

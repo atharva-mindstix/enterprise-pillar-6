@@ -72,9 +72,14 @@ def main() -> int:
 
     tokens = cognito_login(user, password)
     access = tokens["AccessToken"]
+    id_tok = tokens["IdToken"]
     workload = get_workload_access_token_for_jwt(access)
     assert workload and len(workload) > 20
-    print(f"good JWT → workload token len={len(workload)}")
+    print(f"AccessToken → workload token len={len(workload)}")
+    # Connect GitHub binds on IdToken (CompleteResourceTokenAuth needs OIDC aud)
+    workload_id = get_workload_access_token_for_jwt(id_tok)
+    assert workload_id and len(workload_id) > 20
+    print(f"IdToken → workload token len={len(workload_id)}")
     print("ok")
     return 0
 

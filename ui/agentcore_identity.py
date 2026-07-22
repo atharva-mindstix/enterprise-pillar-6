@@ -80,15 +80,22 @@ def runtime_arn() -> str | None:
 def _client_error(exc: ClientError) -> RuntimeError:
     err = exc.response.get("Error") or {}
     code = err.get("Code") or "ClientError"
-    msg = err.get("Message") or str(exc)
-    return RuntimeError(f"{code}: {msg}")
+    msg = err.get("Message") or exc.response.get("message")
+    meta = exc.response.get("ResponseMetadata") or {}
+    req = meta.get("RequestId") or meta.get("RequestID")
+    # ValidationException often has Message=null; surface Error + request id
+    detail = msg if msg not in (None, "") else repr(err)
+    if req:
+        detail = f"{detail} (RequestId={req})"
+    return RuntimeError(f"{code}: {detail}")
 
 
 def get_workload_access_token_for_jwt(user_token: str) -> str:
     """
-    Exchange Cognito access token for AgentCore workload token (D1-B2).
+    Exchange Cognito JWT for AgentCore workload token (D1-B2).
 
-    Prefer the Cognito AccessToken (has client_id). Raises on invalid JWT.
+    For USER_FEDERATION session binding, prefer the Cognito IdToken (has aud).
+    AccessToken also works for mint; CompleteResourceTokenAuth is pickier.
     """
     if not user_token or not user_token.strip():
         raise ValueError("user_token is required")
@@ -130,13 +137,22 @@ def start_github_oauth(
 def complete_github_oauth_session(
     *,
     session_uri: str,
-    cognito_access_token: str,
+    user_token: str,
 ) -> None:
-    """Bind 3LO session to the Cognito user who started Connect GitHub (D1-C4)."""
+    """
+    Bind 3LO session (D1-C4).
+
+    user_token must be the *exact* Cognito JWT passed to GetWorkloadAccessTokenForJWT
+    before GetResourceOauth2Token. Session is single-use — do not retry with other JWTs.
+    """
+    session_uri = urllib.parse.unquote(session_uri.strip())
+    user_token = user_token.strip()
+    if not session_uri or not user_token:
+        raise ValueError("session_uri and user_token are required")
     try:
         _dp().complete_resource_token_auth(
             sessionUri=session_uri,
-            userIdentifier={"userToken": cognito_access_token},
+            userIdentifier={"userToken": user_token},
         )
     except ClientError as exc:
         raise _client_error(exc) from exc

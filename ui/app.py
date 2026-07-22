@@ -30,6 +30,7 @@ from agentcore_identity import (
 )
 from cognito_auth import cognito_login, user_from_claims, verify_id_token
 from github_oauth import (
+    claim_oauth_callback,
     create_agent_issue,
     fetch_github_user,
     github_oauth_app_hint,
@@ -76,7 +77,7 @@ def _qp_one(name: str) -> str | None:
 def _restore_cognito_from_pending(pending: dict) -> bool:
     """Restore Cognito session from pending; do not remint workload here."""
     if st.session_state.user:
-        # Keep pending access_token as source of truth for CompleteResourceTokenAuth
+        # Prefer pending JWTs (exact bind artifact for CompleteResourceTokenAuth)
         if pending.get("access_token"):
             st.session_state.access_token = pending["access_token"]
         if pending.get("id_token"):
@@ -102,14 +103,11 @@ def _handle_agentcore_github_callback() -> None:
     if not session_id:
         return
 
-    # Streamlit often runs the script twice; CompleteResourceTokenAuth is once-only.
     if st.session_state.get("_oauth_callback_claimed") == session_id:
         st.query_params.clear()
         return
-    st.session_state._oauth_callback_claimed = session_id
 
     state = _qp_one("state") or st.session_state.github_oauth_state
-    # Clear URL immediately so reruns don't re-enter with the same session_id
     st.query_params.clear()
 
     pending = peek_pending_oauth(state) if state else None
@@ -119,14 +117,14 @@ def _handle_agentcore_github_callback() -> None:
             state = st.session_state.github_oauth_state
 
     if not pending:
-        if not st.session_state.access_token or not st.session_state.user:
+        if not st.session_state.user or not st.session_state.id_token:
             st.session_state.github_error = (
                 "GitHub OAuth return missing pending state — sign in and Connect GitHub again."
             )
             return
-        cognito_access = st.session_state.access_token
+        # Last resort: live session IdToken (must be same JWT that started OAuth)
+        bind_token = st.session_state.id_token
         cognito_sub = st.session_state.user["sub"]
-        session_uri = session_id
     else:
         if not _restore_cognito_from_pending(pending):
             return
@@ -135,35 +133,78 @@ def _handle_agentcore_github_callback() -> None:
                 "GitHub OAuth was started for a different Cognito user."
             )
             return
-        # Must be the exact Cognito AccessToken used to mint the workload token
-        # that started GetResourceOauth2Token (AgentCore session binding).
-        cognito_access = pending.get("access_token") or st.session_state.access_token
+        # Exact JWT that minted workload before GetResourceOauth2Token (IdToken)
+        bind_token = (
+            pending.get("bind_user_token")
+            or pending.get("id_token")
+            or st.session_state.id_token
+        )
         cognito_sub = pending["cognito_sub"]
-        session_uri = pending.get("session_uri") or session_id
 
-    if not cognito_access:
+    if not bind_token:
         st.session_state.github_error = (
-            "Missing Cognito AccessToken for CompleteResourceTokenAuth — sign in again."
+            "Missing Cognito IdToken for CompleteResourceTokenAuth — sign in again."
         )
         return
 
+    # Same-run Streamlit double-fire only; disk claim after success so a failed
+    # Complete can be retried with the same session_id once.
+    if st.session_state.get("_oauth_callback_claimed") == session_id:
+        return
+    st.session_state._oauth_callback_claimed = session_id
+
+    pending_uri = (pending or {}).get("session_uri") if pending else None
+    session_uri = session_id
+    if pending_uri and pending_uri != session_id:
+        # Prefer callback session_id (AgentCore redirect); keep pending for diagnostics
+        pass
+
     try:
-        complete_github_oauth_session(
-            session_uri=session_uri,
-            cognito_access_token=cognito_access,
-        )
-        # Remint workload only after session bind (same Cognito AccessToken)
-        st.session_state.workload_token = get_workload_access_token_for_jwt(
-            cognito_access
-        )
-        gh_token = get_github_access_token(
-            st.session_state.workload_token,
-            session_uri=session_uri,
-        )
+        try:
+            complete_github_oauth_session(
+                session_uri=session_uri,
+                user_token=bind_token,
+            )
+        except Exception as complete_exc:
+            # If callback URI fails validation, retry once with start-time sessionUri
+            if (
+                pending_uri
+                and pending_uri != session_uri
+                and "ValidationException" in str(complete_exc)
+            ):
+                complete_github_oauth_session(
+                    session_uri=pending_uri,
+                    user_token=bind_token,
+                )
+                session_uri = pending_uri
+            else:
+                raise RuntimeError(
+                    f"CompleteResourceTokenAuth: {complete_exc} "
+                    f"[callback_session={session_id!r} pending_session={pending_uri!r}]"
+                ) from complete_exc
+
+        try:
+            st.session_state.workload_token = get_workload_access_token_for_jwt(
+                bind_token
+            )
+        except Exception as remint_exc:
+            raise RuntimeError(
+                f"Remint workload after bind: {remint_exc}"
+            ) from remint_exc
+
+        try:
+            gh_token = get_github_access_token(
+                st.session_state.workload_token,
+                session_uri=session_uri,
+            )
+        except Exception as gh_exc:
+            raise RuntimeError(f"GetResourceOauth2Token (fetch): {gh_exc}") from gh_exc
+
         gh_user = fetch_github_user(gh_token)
         save_link(cognito_sub, gh_user)
         if state:
             pop_pending_oauth(state)
+        claim_oauth_callback(session_id)
         st.session_state.github_user = gh_user
         st.session_state.github_connected = True
         st.session_state.github_oauth_state = None
@@ -171,6 +212,9 @@ def _handle_agentcore_github_callback() -> None:
         st.session_state.github_session_uri = None
         st.session_state.github_error = None
     except Exception as exc:  # noqa: BLE001
+        # Allow one more Complete attempt on next load of same session_id
+        if st.session_state.get("_oauth_callback_claimed") == session_id:
+            st.session_state._oauth_callback_claimed = None
         st.session_state.github_error = (
             f"{exc} — sign out, sign in once, Connect GitHub again "
             "(do not re-login mid-flow; pending OAuth session is single-use)."
@@ -179,25 +223,29 @@ def _handle_agentcore_github_callback() -> None:
 
 
 def _begin_github_connect(user: dict) -> None:
-    if not st.session_state.workload_token:
-        raise RuntimeError(
-            "Need AgentCore workload token first — sign out and sign in again."
-        )
     if not st.session_state.access_token or not st.session_state.id_token:
         raise RuntimeError("Missing Cognito tokens — sign out and sign in again.")
+
+    # CompleteResourceTokenAuth validates an OIDC userToken (aud). Bind the IdToken
+    # for mint + GetResourceOauth2Token + Complete — exact same string end-to-end.
+    access = st.session_state.access_token
+    bind_token = st.session_state.id_token
+    workload = get_workload_access_token_for_jwt(bind_token)
+    st.session_state.workload_token = workload
 
     state = new_oauth_state()
     st.session_state.github_oauth_state = state
     st.session_state._oauth_callback_claimed = None
     st.session_state.github_error = None
-    resp = start_github_oauth(st.session_state.workload_token, custom_state=state)
+    resp = start_github_oauth(workload, custom_state=state)
     session_uri = resp.get("sessionUri")
     st.session_state.github_session_uri = session_uri
     save_pending_oauth(
         state,
         cognito_sub=user["sub"],
-        id_token=st.session_state.id_token,
-        access_token=st.session_state.access_token,
+        id_token=bind_token,
+        access_token=access,
+        bind_user_token=bind_token,
         email=user["email"],
         session_uri=session_uri,
     )

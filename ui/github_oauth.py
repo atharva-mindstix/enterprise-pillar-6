@@ -30,7 +30,8 @@ def new_oauth_state() -> str:
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    # utf-8-sig: Windows editors may leave a BOM; json rejects bare utf-8 with one
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -46,6 +47,7 @@ def save_pending_oauth(
     access_token: str,
     email: str,
     session_uri: str | None = None,
+    bind_user_token: str | None = None,
 ) -> None:
     # ponytail: short-lived tokens on disk so AgentCore 3LO redirect can restore
     # Cognito + CompleteResourceTokenAuth if Streamlit session resets.
@@ -54,6 +56,9 @@ def save_pending_oauth(
         "cognito_sub": cognito_sub,
         "id_token": id_token,
         "access_token": access_token,
+        # Exact JWT used for GetWorkloadAccessTokenForJWT right before GetResourceOauth2Token
+        # (IdToken preferred — CompleteResourceTokenAuth expects OIDC aud)
+        "bind_user_token": bind_user_token or id_token,
         "email": email,
         "session_uri": session_uri,
     }
@@ -69,6 +74,20 @@ def pop_pending_oauth(state: str) -> dict[str, Any] | None:
 
 def peek_pending_oauth(state: str) -> dict[str, Any] | None:
     return _read_json(_PENDING_PATH).get(state)
+
+
+def claim_oauth_callback(session_id: str) -> bool:
+    """Return True if this session_id was not claimed yet (survives Streamlit session reset)."""
+    path = _DATA / "oauth_claimed.json"
+    data = _read_json(path)
+    claimed: list[str] = list(data.get("claimed") or [])
+    if session_id in claimed:
+        return False
+    claimed.append(session_id)
+    data["claimed"] = claimed[-40:]
+    _write_json(path, data)
+    return True
+
 
 
 def save_link(cognito_sub: str, github_user: dict[str, Any]) -> None:
