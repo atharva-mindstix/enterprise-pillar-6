@@ -100,3 +100,12 @@ Running append-only changelog of code changes in this project.
 
 - Point `AGENTCORE_GITHUB_PROVIDER` / callback defaults at `pilllar-6-github` (new AgentCore callback UUID)
 - Updated `.env.shared`, example env, UI README, and githubpoc README
+
+## 2026-07-22 13:35 +05:30 — Gateway Lambda tools (single function)
+
+- Added `lambda/` package: `app.py` handler routes `inspect_repository`, `update_documentation`, and `modify_source_code`
+- `github_client.py` calls GitHub REST API; `tool_definitions.json` is the Gateway target schema reference
+
+## 2026-07-22 13:42 +05:30 — Consolidate Lambda into single file
+
+- Merged `tools.py`, `github_client.py`, and `paths.py` into `lambda/app.py`; removed split modules
