@@ -1,4 +1,4 @@
-# Demo UI (Streamlit) + Cognito + GitHub OAuth
+# Demo UI (Streamlit) + Cognito + AgentCore Identity GitHub (D1-B/C)
 
 ```bash
 cd ui
@@ -12,22 +12,64 @@ Custom username/password → `USER_PASSWORD_AUTH` → ID token verified via JWKS
 
 Requires `.env.shared` with pool/client. If the app client has a secret, set `COGNITO_APP_CLIENT_SECRET`.
 
-## Connect GitHub (frontend OAuth)
+## AgentCore JWT + workload token (D1-B)
 
-1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**
-   - Homepage URL: `http://localhost:8501/`
-   - Authorization callback URL: `http://localhost:8501/` (must match `GITHUB_REDIRECT_URI`)
-2. Put **Client ID** and **Client secret** in repo-root `.env.shared`:
+After Cognito login the UI calls `GetWorkloadAccessTokenForJWT` with the Cognito **AccessToken** against workload `AGENTCORE_WORKLOAD_NAME` (default `githubWorkflowUi`).
+
+| Piece | What |
+| --- | --- |
+| Inbound JWT authorizer | On `githubWorkflow` in `githubpoc/agentcore/agentcore.json` (`CUSTOM_JWT` + Cognito discovery / `allowedAudience`) |
+| Deploy | `agentcore deploy` applies authorizer with the runtime |
+| Workload exchange | `ui/agentcore_identity.py` → `get_workload_access_token_for_jwt` |
+| Self-check | `python check_workload_token.py` (set `COGNITO_TEST_USERNAME` / `COGNITO_TEST_PASSWORD` for good-JWT path) |
+
+### Invoke headers (for UI → deployed Runtime)
+
+```http
+POST https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{url-encoded-arn}/invocations?qualifier=DEFAULT
+Authorization: Bearer <Cognito AccessToken>
+Content-Type: application/json
+X-Amzn-Bedrock-AgentCore-Runtime-Session-Id: <session-id>
+```
+
+Body example: `{"prompt": "hello", "session": {"sub": "...", "email": "..."}}`
+
+Notes:
+
+- Prefer **AccessToken** / **IdToken** that satisfy Cognito discovery + `allowedAudience` (app client id).
+- Do not put the workload token in the browser; keep it server-side (Streamlit session).
+- Runtime service-linked workloads cannot be exchanged via the data-plane API by the caller — AgentCore exchanges on Bearer invoke. The standalone workload `githubWorkflowUi` is for the UI path (JWT exchange + GitHub `USER_FEDERATION`).
+
+## Connect GitHub via AgentCore Identity (D1-C)
+
+Flow: workload token → `GetResourceOauth2Token` (`USER_FEDERATION`, provider `github-prajwal`) → user opens `authorizationUrl` → AgentCore redirects to `AGENTCORE_OAUTH2_RETURN_URL` with `session_id` → UI calls `CompleteResourceTokenAuth` → vaulted token via `GetResourceOauth2Token` again for GitHub API.
+
+### One-time GitHub OAuth App setup
+
+1. GitHub → **Settings → Developer settings → OAuth Apps**
+2. Authorization callback URL **must** include the AgentCore Identity callback from the outbound provider (not Streamlit):
 
 ```text
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GITHUB_REDIRECT_URI=http://localhost:8501/
+https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/420c6816-4c86-4c01-bd24-ed269d050fe7
+```
+
+3. Client ID/secret are already stored on outbound identity `github-prajwal` (Secrets Manager). Keep the same values in `.env.shared` only if you still need them for local debugging; Connect GitHub no longer exchanges codes against GitHub directly.
+
+### Env
+
+```text
+AGENTCORE_WORKLOAD_NAME=githubWorkflowUi
+AGENTCORE_GITHUB_PROVIDER=github-prajwal
+AGENTCORE_OAUTH2_RETURN_URL=http://localhost:8501/
+AGENTCORE_GITHUB_CALLBACK_URL=https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/420c6816-4c86-4c01-bd24-ed269d050fe7
 GITHUB_OAUTH_SCOPES=read:user repo
 ```
 
-3. Restart Streamlit → Sign in with Cognito → **Connect GitHub** → approve → create a task (creates a real issue with label `agent-task`).
+Workload `githubWorkflowUi` has `allowedResourceOauth2ReturnUrls` = `http://localhost:8501/` (required for 3LO session binding).
 
-Access token stays in the Streamlit **server session** only; Cognito↔GitHub id mapping is stored under `.data/github_links.json` (gitignored). No long-lived GitHub token in the browser.
+### Verify
 
-Upgrade path (later): AgentCore Identity `GetResourceOauth2Token` (`USER_FEDERATION`) instead of this direct OAuth App flow.
+1. Restart Streamlit → Cognito sign-in → workload token ready  
+2. **Connect GitHub** → **Authorize on GitHub** → return to UI connected  
+3. Create Agent Task → issue created; UI does **not** keep a long-lived GitHub token (fetched from AgentCore vault at use time)  
+4. Cognito↔GitHub id map under `.data/github_links.json` (gitignored)

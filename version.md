@@ -68,3 +68,30 @@ Running append-only changelog of code changes in this project.
 ## 2026-07-21 16:57 +05:30 — Fix GitHub OAuth session loss
 
 - Persist OAuth pending state (Cognito sub + id_token) under `.data/` so callback restores login after GitHub redirect
+
+## 2026-07-21 23:43 +05:30 — D1-B AgentCore JWT + workload token
+
+- Added `ui/agentcore_identity.py` (Cognito JWT authorizer config, `GetWorkloadAccessTokenForJWT`, invoke headers/URL)
+- Streamlit login exchanges AccessToken → workload token; `check_workload_token.py` verifies bad JWT reject
+- Added `githubpoc/agentcore/jwt-authorizer.json` + `scripts/apply_jwt_authorizer.py`; set `aws-targets.json`; env keys for workload/runtime
+
+## 2026-07-22 00:01 +05:30 — Runtime JWT in agentcore.json
+
+- Moved Cognito `CUSTOM_JWT` authorizer onto `githubWorkflow` in `agentcore.json`
+- Removed `jwt-authorizer.json` + `apply_jwt_authorizer.py`; docs/env now point at `agentcore deploy`
+
+## 2026-07-22 00:17 +05:30 — Fix Windows deploy path-with-spaces
+
+- Root cause: AgentCore CLI joins `uv` args without quoting on Windows, breaking paths under `Prajwal Nivangune`
+- Added `deploy-windows.ps1` (junction `C:\ac-githubpoc`); deployed runtime `githubpoc_githubWorkflow-QFu5je90hW` and set `AGENTCORE_RUNTIME_ARN`
+
+## 2026-07-22 00:43 +05:30 — Wire bootcamp Gateway (IAM)
+
+- Point `githubWorkflow` MCP client at bootcamp gateway URL with SigV4 via `mcp-proxy-for-aws`
+- Added `connections.bootcamp-gateway` + `GATEWAY_BOOTCAMP_GATEWAY_URL` in `agentcore.json` / `.env.shared`
+
+## 2026-07-22 01:22 +05:30 — D1-C GitHub via AgentCore Identity
+
+- Connect GitHub now uses `GetResourceOauth2Token` (`USER_FEDERATION`) + `CompleteResourceTokenAuth` on provider `github-prajwal`
+- Created workload `githubWorkflowUi` with `allowedResourceOauth2ReturnUrls=http://localhost:8501/` (IAM blocked Update on `githubWorkflow`)
+- UI fetches vaulted GitHub token at issue-create time; Cognito↔GitHub map still in `.data/`

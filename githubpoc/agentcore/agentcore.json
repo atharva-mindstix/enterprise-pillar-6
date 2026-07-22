@@ -15,7 +15,38 @@
       "codeLocation": "app/githubWorkflow/",
       "runtimeVersion": "PYTHON_3_14",
       "networkMode": "PUBLIC",
-      "protocol": "HTTP"
+      "protocol": "HTTP",
+      "authorizerType": "CUSTOM_JWT",
+      "authorizerConfiguration": {
+        "customJwtAuthorizer": {
+          "discoveryUrl": "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_rP0WP4oPU/.well-known/openid-configuration",
+          "allowedAudience": [
+            "2r0nohpcrjnhsi2pvc1ck1f7on"
+          ]
+        }
+      },
+      "requestHeaderAllowlist": [
+        "Authorization"
+      ],
+      "envVars": [
+        {
+          "name": "GATEWAY_BOOTCAMP_GATEWAY_URL",
+          "value": "https://bootcamp-gateway-jwodqi3x4j.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+        }
+      ],
+      "connections": [
+        {
+          "id": "bootcamp-gateway",
+          "to": {
+            "type": "gateway",
+            "arn": "arn:aws:bedrock-agentcore:us-west-2:003417131700:gateway/bootcamp-gateway-jwodqi3x4j",
+            "outboundAuth": {
+              "awsIam": {}
+            }
+          },
+          "description": "External bootcamp AgentCore Gateway (IAM inbound) for MCP tools"
+        }
+      ]
     }
   ],
   "memories": [],

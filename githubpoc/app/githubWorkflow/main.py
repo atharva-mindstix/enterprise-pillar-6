@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from typing import Any
 
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -8,7 +7,7 @@ from langchain.tools import tool
 from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
-from mcp_client.client import get_streamable_http_mcp_client
+from mcp_client.client import load_gateway_mcp_tools
 from prompt import build_system_prompt
 
 LangchainInstrumentor().instrument()
@@ -61,41 +60,35 @@ def touch_thread(thread_id):
 async def invoke(payload, context):
     log.info("Invoking Agent.....")
 
-    # Get MCP Client
-    mcp_client = get_streamable_http_mcp_client()
+    # IAM MCP session to bootcamp AgentCore Gateway (must stay open while tools run)
+    mcp_tools, gateway_stack = await load_gateway_mcp_tools()
+    try:
+        session_context = payload.get("session")
+        system_prompt = build_system_prompt(session_context)
 
-    # Load MCP Tools
-    mcp_tools = []
-    if mcp_client:
-        mcp_tools = await mcp_client.get_tools()
+        graph = create_react_agent(
+            get_or_create_model(),
+            tools=mcp_tools + tools,
+            prompt=system_prompt,
+            checkpointer=_checkpointer,
+        )
 
-    session_context = payload.get("session")
-    system_prompt = build_system_prompt(session_context)
+        prompt = payload.get("prompt", "What can you help me with?")
+        session_id = getattr(context, "session_id", "default-session")
+        touch_thread(session_id)
+        log.info(f"Agent input: {prompt}")
 
-    # Define the agent using create_react_agent (checkpointer is shared across invocations)
-    graph = create_react_agent(
-        get_or_create_model(),
-        tools=mcp_tools + tools,
-        prompt=system_prompt,
-        checkpointer=_checkpointer,
-    )
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content=prompt)]},
+            config={"configurable": {"thread_id": session_id}},
+        )
 
-    # Process the user prompt
-    prompt = payload.get("prompt", "What can you help me with?")
-    session_id = getattr(context, "session_id", "default-session")
-    touch_thread(session_id)
-    log.info(f"Agent input: {prompt}")
-
-    # Run the agent (checkpointer auto-loads/saves history per session)
-    result = await graph.ainvoke(
-        {"messages": [HumanMessage(content=prompt)]},
-        config={"configurable": {"thread_id": session_id}},
-    )
-
-    # Return result
-    output = result["messages"][-1].content
-    log.info(f"Agent output: {output}")
-    return {"result": output}
+        output = result["messages"][-1].content
+        log.info(f"Agent output: {output}")
+        return {"result": output}
+    finally:
+        if gateway_stack is not None:
+            await gateway_stack.aclose()
 
 
 if __name__ == "__main__":

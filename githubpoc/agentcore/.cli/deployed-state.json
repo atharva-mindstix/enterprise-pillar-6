@@ -1,3 +1,17 @@
 {
-  "targets": {}
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "githubWorkflow": {
+            "runtimeId": "githubpoc_githubWorkflow-QFu5je90hW",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:003417131700:runtime/githubpoc_githubWorkflow-QFu5je90hW",
+            "roleArn": "arn:aws:iam::003417131700:role/AgentCore-githubpoc-defau-ApplicationAgentGithubWor-vebGtqqd72n4"
+          }
+        },
+        "stackName": "AgentCore-githubpoc-default",
+        "deployHash": "33659a7202cc052c"
+      }
+    }
+  }
 }

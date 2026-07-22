@@ -1,8 +1,8 @@
-"""GitHub OAuth (authorization code) for the demo UI.
+"""GitHub API helpers + pending OAuth state for AgentCore Identity 3LO (D1-C).
 
-ponytail: Direct GitHub OAuth App for UI testing. Upgrade path: AgentCore
-Identity GetResourceOauth2Token (USER_FEDERATION) once a GithubOauth2
-credential provider + workload token exist.
+Connect GitHub uses AgentCore GetResourceOauth2Token / CompleteResourceTokenAuth
+(see agentcore_identity.py). This module keeps GitHub REST helpers and the
+short-lived pending state file so Streamlit can restore Cognito after redirect.
 """
 
 from __future__ import annotations
@@ -12,39 +12,15 @@ import os
 import secrets
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 
 import requests
 
-AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-TOKEN_URL = "https://github.com/login/oauth/access_token"
 API = "https://api.github.com"
 _DATA = Path(__file__).resolve().parents[1] / ".data"
 # Cognito sub → GitHub identity (no access token on disk)
 _LINKS_PATH = _DATA / "github_links.json"
-# OAuth state → Cognito session (survives Streamlit session loss on redirect)
+# customState → Cognito session (survives Streamlit session loss on redirect)
 _PENDING_PATH = _DATA / "oauth_pending.json"
-
-
-def _cfg() -> dict[str, str]:
-    client_id = os.getenv("GITHUB_CLIENT_ID", "").strip()
-    client_secret = os.getenv("GITHUB_CLIENT_SECRET", "").strip()
-    redirect = os.getenv(
-        "GITHUB_REDIRECT_URI",
-        os.getenv("COGNITO_REDIRECT_URI", "http://localhost:8501/"),
-    ).strip()
-    scopes = os.getenv("GITHUB_OAUTH_SCOPES", "read:user repo").strip()
-    if not client_id or not client_secret:
-        raise RuntimeError(
-            "Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env.shared "
-            "(GitHub → Settings → Developer settings → OAuth Apps)."
-        )
-    return {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect,
-        "scopes": scopes,
-    }
 
 
 def new_oauth_state() -> str:
@@ -62,14 +38,24 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def save_pending_oauth(state: str, *, cognito_sub: str, id_token: str, email: str) -> None:
-    # ponytail: short-lived id_token on disk so GitHub redirect can restore Cognito
-    # if Streamlit session resets; upgrade: AgentCore callback + workload session.
+def save_pending_oauth(
+    state: str,
+    *,
+    cognito_sub: str,
+    id_token: str,
+    access_token: str,
+    email: str,
+    session_uri: str | None = None,
+) -> None:
+    # ponytail: short-lived tokens on disk so AgentCore 3LO redirect can restore
+    # Cognito + CompleteResourceTokenAuth if Streamlit session resets.
     pending = _read_json(_PENDING_PATH)
     pending[state] = {
         "cognito_sub": cognito_sub,
         "id_token": id_token,
+        "access_token": access_token,
         "email": email,
+        "session_uri": session_uri,
     }
     _write_json(_PENDING_PATH, pending)
 
@@ -81,38 +67,22 @@ def pop_pending_oauth(state: str) -> dict[str, Any] | None:
     return row
 
 
-def authorize_url(state: str) -> str:
-    c = _cfg()
-    q = urlencode(
-        {
-            "client_id": c["client_id"],
-            "redirect_uri": c["redirect_uri"],
-            "scope": c["scopes"],
-            "state": state,
-        }
-    )
-    return f"{AUTHORIZE_URL}?{q}"
+def peek_pending_oauth(state: str) -> dict[str, Any] | None:
+    return _read_json(_PENDING_PATH).get(state)
 
 
-def exchange_code(code: str) -> str:
-    c = _cfg()
-    resp = requests.post(
-        TOKEN_URL,
-        headers={"Accept": "application/json"},
-        data={
-            "client_id": c["client_id"],
-            "client_secret": c["client_secret"],
-            "code": code,
-            "redirect_uri": c["redirect_uri"],
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    token = data.get("access_token")
-    if not token:
-        raise RuntimeError(f"GitHub token exchange failed: {data}")
-    return token
+def save_link(cognito_sub: str, github_user: dict[str, Any]) -> None:
+    links = _read_json(_LINKS_PATH)
+    links[cognito_sub] = {
+        "cognito_sub": cognito_sub,
+        "github_user_id": github_user["github_user_id"],
+        "github_login": github_user["github_login"],
+    }
+    _write_json(_LINKS_PATH, links)
+
+
+def load_link(cognito_sub: str) -> dict[str, Any] | None:
+    return _read_json(_LINKS_PATH).get(cognito_sub)
 
 
 def fetch_github_user(access_token: str) -> dict[str, Any]:
@@ -132,20 +102,6 @@ def fetch_github_user(access_token: str) -> dict[str, Any]:
         "github_login": u["login"],
         "name": u.get("name") or u["login"],
     }
-
-
-def save_link(cognito_sub: str, github_user: dict[str, Any]) -> None:
-    links = _read_json(_LINKS_PATH)
-    links[cognito_sub] = {
-        "cognito_sub": cognito_sub,
-        "github_user_id": github_user["github_user_id"],
-        "github_login": github_user["github_login"],
-    }
-    _write_json(_LINKS_PATH, links)
-
-
-def load_link(cognito_sub: str) -> dict[str, Any] | None:
-    return _read_json(_LINKS_PATH).get(cognito_sub)
 
 
 def resolve_repo(repo: str, github_login: str) -> tuple[str, str]:
@@ -197,3 +153,12 @@ def create_agent_issue(
         "repo": f"{owner}/{repo}",
         "label": label,
     }
+
+
+def github_oauth_app_hint() -> str:
+    """Callback the GitHub OAuth App must allow (AgentCore Identity, not Streamlit)."""
+    return os.getenv(
+        "AGENTCORE_GITHUB_CALLBACK_URL",
+        "https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/"
+        "420c6816-4c86-4c01-bd24-ed269d050fe7",
+    ).strip()

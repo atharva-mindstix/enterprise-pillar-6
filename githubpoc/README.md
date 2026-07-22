@@ -45,6 +45,40 @@ Deploy to AWS:
 agentcore deploy
 ```
 
+**Windows note:** if your project path has spaces (e.g. `Prajwal Nivangune`), CDK synth fails when packaging `pyproject.toml` (CLI joins `uv` args unquoted). Use:
+
+```powershell
+.\deploy-windows.ps1
+# or: cd C:\ac-githubpoc ; agentcore deploy -y --target default
+```
+
+### JWT inbound auth (D1-B)
+
+Cognito JWT is declared on the `githubWorkflow` runtime in `agentcore/agentcore.json`
+(`authorizerType: CUSTOM_JWT` + discovery URL / `allowedAudience`). Deploy picks it up:
+
+```bash
+agentcore deploy
+```
+
+UI exchanges Cognito AccessToken → workload token via `GetWorkloadAccessTokenForJWT`
+(workload `githubWorkflowUi` for UI 3LO; see `../ui/README.md`).
+
+### GitHub outbound Identity (D1-C)
+
+Outbound provider **`github-prajwal`** (console) is used by the Streamlit UI via
+`GetResourceOauth2Token` / `USER_FEDERATION`. GitHub OAuth App callback must be the
+AgentCore Identity callback URL from that provider. Details in `../ui/README.md`.
+
+### Bootcamp Gateway (IAM)
+
+Runtime calls external gateway MCP with **AWS IAM (SigV4)** via `mcp-proxy-for-aws`:
+
+- URL: `GATEWAY_BOOTCAMP_GATEWAY_URL` / connection `bootcamp-gateway`
+- ARN: `arn:aws:bedrock-agentcore:us-west-2:003417131700:gateway/bootcamp-gateway-jwodqi3x4j`
+
+Redeploy after changing `agentcore.json` connections (`.\deploy-windows.ps1`).
+
 ## Commands
 
 | Command | Description |
