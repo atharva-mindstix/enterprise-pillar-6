@@ -66,7 +66,7 @@ UI exchanges Cognito AccessToken → workload token via `GetWorkloadAccessTokenF
 
 ### GitHub outbound Identity (D1-C)
 
-Outbound provider **`github-prajwal`** (console) is used by the Streamlit UI via
+Outbound provider **`pilllar-6-github`** (console) is used by the Streamlit UI via
 `GetResourceOauth2Token` / `USER_FEDERATION`. GitHub OAuth App callback must be the
 AgentCore Identity callback URL from that provider. Details in `../ui/README.md`.
 

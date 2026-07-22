@@ -95,3 +95,8 @@ Running append-only changelog of code changes in this project.
 - Connect GitHub now uses `GetResourceOauth2Token` (`USER_FEDERATION`) + `CompleteResourceTokenAuth` on provider `github-prajwal`
 - Created workload `githubWorkflowUi` with `allowedResourceOauth2ReturnUrls=http://localhost:8501/` (IAM blocked Update on `githubWorkflow`)
 - UI fetches vaulted GitHub token at issue-create time; Cognito↔GitHub map still in `.data/`
+
+## 2026-07-22 12:50 +05:30 — Switch outbound Identity to pilllar-6-github
+
+- Point `AGENTCORE_GITHUB_PROVIDER` / callback defaults at `pilllar-6-github` (new AgentCore callback UUID)
+- Updated `.env.shared`, example env, UI README, and githubpoc README

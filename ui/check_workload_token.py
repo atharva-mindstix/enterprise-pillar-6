@@ -41,7 +41,7 @@ def main() -> int:
     print(f"workloadName={workload_name()}")
     print(f"githubProvider={github_provider_name()}")
     print(f"oauth2ReturnUrl={oauth2_return_url()}")
-    assert github_provider_name() == "github-prajwal" or os.getenv(
+    assert github_provider_name() == "pilllar-6-github" or os.getenv(
         "AGENTCORE_GITHUB_PROVIDER"
     )
     assert oauth2_return_url().startswith("http")

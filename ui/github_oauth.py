@@ -160,5 +160,5 @@ def github_oauth_app_hint() -> str:
     return os.getenv(
         "AGENTCORE_GITHUB_CALLBACK_URL",
         "https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/"
-        "420c6816-4c86-4c01-bd24-ed269d050fe7",
+        "632c2a61-cbc6-4102-9b1e-17d47f886676",
     ).strip()

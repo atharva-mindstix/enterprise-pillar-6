@@ -57,7 +57,7 @@ def workload_name() -> str:
 
 
 def github_provider_name() -> str:
-    return os.getenv("AGENTCORE_GITHUB_PROVIDER", "github-prajwal").strip()
+    return os.getenv("AGENTCORE_GITHUB_PROVIDER", "pilllar-6-github").strip()
 
 
 def oauth2_return_url() -> str:

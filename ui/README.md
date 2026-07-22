@@ -42,7 +42,7 @@ Notes:
 
 ## Connect GitHub via AgentCore Identity (D1-C)
 
-Flow: workload token → `GetResourceOauth2Token` (`USER_FEDERATION`, provider `github-prajwal`) → user opens `authorizationUrl` → AgentCore redirects to `AGENTCORE_OAUTH2_RETURN_URL` with `session_id` → UI calls `CompleteResourceTokenAuth` → vaulted token via `GetResourceOauth2Token` again for GitHub API.
+Flow: workload token → `GetResourceOauth2Token` (`USER_FEDERATION`, provider `pilllar-6-github`) → user opens `authorizationUrl` → AgentCore redirects to `AGENTCORE_OAUTH2_RETURN_URL` with `session_id` → UI calls `CompleteResourceTokenAuth` → vaulted token via `GetResourceOauth2Token` again for GitHub API.
 
 ### One-time GitHub OAuth App setup
 
@@ -50,18 +50,18 @@ Flow: workload token → `GetResourceOauth2Token` (`USER_FEDERATION`, provider `
 2. Authorization callback URL **must** include the AgentCore Identity callback from the outbound provider (not Streamlit):
 
 ```text
-https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/420c6816-4c86-4c01-bd24-ed269d050fe7
+https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/632c2a61-cbc6-4102-9b1e-17d47f886676
 ```
 
-3. Client ID/secret are already stored on outbound identity `github-prajwal` (Secrets Manager). Keep the same values in `.env.shared` only if you still need them for local debugging; Connect GitHub no longer exchanges codes against GitHub directly.
+3. Client ID/secret are already stored on outbound identity `pilllar-6-github` (Secrets Manager). Keep the same values in `.env.shared` only if you still need them for local debugging; Connect GitHub no longer exchanges codes against GitHub directly.
 
 ### Env
 
 ```text
 AGENTCORE_WORKLOAD_NAME=githubWorkflowUi
-AGENTCORE_GITHUB_PROVIDER=github-prajwal
+AGENTCORE_GITHUB_PROVIDER=pilllar-6-github
 AGENTCORE_OAUTH2_RETURN_URL=http://localhost:8501/
-AGENTCORE_GITHUB_CALLBACK_URL=https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/420c6816-4c86-4c01-bd24-ed269d050fe7
+AGENTCORE_GITHUB_CALLBACK_URL=https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/632c2a61-cbc6-4102-9b1e-17d47f886676
 GITHUB_OAUTH_SCOPES=read:user repo
 ```
 
