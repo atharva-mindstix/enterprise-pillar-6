@@ -77,6 +77,13 @@ def runtime_arn() -> str | None:
     return arn or None
 
 
+def _client_error(exc: ClientError) -> RuntimeError:
+    err = exc.response.get("Error") or {}
+    code = err.get("Code") or "ClientError"
+    msg = err.get("Message") or str(exc)
+    return RuntimeError(f"{code}: {msg}")
+
+
 def get_workload_access_token_for_jwt(user_token: str) -> str:
     """
     Exchange Cognito access token for AgentCore workload token (D1-B2).
@@ -91,9 +98,7 @@ def get_workload_access_token_for_jwt(user_token: str) -> str:
             userToken=user_token.strip(),
         )
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "ClientError")
-        msg = exc.response.get("Error", {}).get("Message", str(exc))
-        raise RuntimeError(f"{code}: {msg}") from exc
+        raise _client_error(exc) from exc
 
     token = resp.get("workloadAccessToken")
     if not token:
@@ -119,9 +124,7 @@ def start_github_oauth(
             forceAuthentication=force,
         )
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "ClientError")
-        msg = exc.response.get("Error", {}).get("Message", str(exc))
-        raise RuntimeError(f"{code}: {msg}") from exc
+        raise _client_error(exc) from exc
 
 
 def complete_github_oauth_session(
@@ -136,9 +139,7 @@ def complete_github_oauth_session(
             userIdentifier={"userToken": cognito_access_token},
         )
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "ClientError")
-        msg = exc.response.get("Error", {}).get("Message", str(exc))
-        raise RuntimeError(f"{code}: {msg}") from exc
+        raise _client_error(exc) from exc
 
 
 def get_github_access_token(
@@ -159,9 +160,7 @@ def get_github_access_token(
     try:
         resp = _dp().get_resource_oauth2_token(**kwargs)
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "ClientError")
-        msg = exc.response.get("Error", {}).get("Message", str(exc))
-        raise RuntimeError(f"{code}: {msg}") from exc
+        raise _client_error(exc) from exc
     token = resp.get("accessToken")
     if not token:
         raise RuntimeError(

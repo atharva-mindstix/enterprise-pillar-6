@@ -100,3 +100,19 @@ Running append-only changelog of code changes in this project.
 
 - Point `AGENTCORE_GITHUB_PROVIDER` / callback defaults at `pilllar-6-github` (new AgentCore callback UUID)
 - Updated `.env.shared`, example env, UI README, and githubpoc README
+
+## 2026-07-22 13:01 +05:30 — Clarify GitHub redirect_uri + better ClientError messages
+
+- Document that GitHub OAuth App callback must be the AgentCore URL (not localhost); UI caption updated
+- Fix `ValidationException: None` when AWS Error.Message is null (fall back to full exception text)
+
+## 2026-07-22 13:41 +05:30 — Fix CompleteResourceTokenAuth session binding
+
+- Claim OAuth callback once (Streamlit double-run) and clear query params before Complete
+- Use pending Cognito AccessToken + session_uri for CompleteResourceTokenAuth (exact token that started 3LO)
+- Pop pending only after success; remint workload after bind
+
+## 2026-07-22 13:48 +05:30 — Fix Cognito PreTokenGeneration Lambda
+
+- Root cause: pool trigger `pillar6-lambda-function-agentcore` handler `lambda_function.lambda_handler` but zip had no `lambda_function` module
+- Deployed passthrough `lambda/lambda_function.py` via `update-function-code` so Cognito login works again

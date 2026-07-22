@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import unquote
 
 from dotenv import load_dotenv
 
@@ -34,6 +35,7 @@ from github_oauth import (
     github_oauth_app_hint,
     load_link,
     new_oauth_state,
+    peek_pending_oauth,
     pop_pending_oauth,
     resolve_repo,
     save_link,
@@ -57,20 +59,34 @@ def _init_state() -> None:
     ss.setdefault("last_issue", None)
     ss.setdefault("auth_error", None)
     ss.setdefault("github_error", None)
+    ss.setdefault("_oauth_callback_claimed", None)
+
+
+def _qp_one(name: str) -> str | None:
+    raw = st.query_params.get(name)
+    if raw is None:
+        return None
+    if isinstance(raw, (list, tuple)):
+        raw = raw[0] if raw else None
+    if not raw:
+        return None
+    return unquote(str(raw))
 
 
 def _restore_cognito_from_pending(pending: dict) -> bool:
+    """Restore Cognito session from pending; do not remint workload here."""
     if st.session_state.user:
+        # Keep pending access_token as source of truth for CompleteResourceTokenAuth
+        if pending.get("access_token"):
+            st.session_state.access_token = pending["access_token"]
+        if pending.get("id_token"):
+            st.session_state.id_token = pending["id_token"]
         return True
     try:
         claims = verify_id_token(pending["id_token"])
         st.session_state.user = user_from_claims(claims)
         st.session_state.id_token = pending["id_token"]
         st.session_state.access_token = pending.get("access_token")
-        if pending.get("access_token") and not st.session_state.workload_token:
-            st.session_state.workload_token = get_workload_access_token_for_jwt(
-                pending["access_token"]
-            )
         return True
     except Exception as exc:  # noqa: BLE001
         st.session_state.github_error = (
@@ -82,21 +98,27 @@ def _restore_cognito_from_pending(pending: dict) -> bool:
 
 def _handle_agentcore_github_callback() -> None:
     """Complete AgentCore 3LO if redirected with ?session_id= (D1-C4)."""
-    session_id = st.query_params.get("session_id")
+    session_id = _qp_one("session_id")
     if not session_id:
         return
 
-    state = st.query_params.get("state") or st.session_state.github_oauth_state
+    # Streamlit often runs the script twice; CompleteResourceTokenAuth is once-only.
+    if st.session_state.get("_oauth_callback_claimed") == session_id:
+        st.query_params.clear()
+        return
+    st.session_state._oauth_callback_claimed = session_id
+
+    state = _qp_one("state") or st.session_state.github_oauth_state
+    # Clear URL immediately so reruns don't re-enter with the same session_id
     st.query_params.clear()
 
-    pending = pop_pending_oauth(state) if state else None
-    if not pending and state:
-        pending = None
+    pending = peek_pending_oauth(state) if state else None
     if not pending and st.session_state.github_oauth_state:
-        pending = pop_pending_oauth(st.session_state.github_oauth_state)
+        pending = peek_pending_oauth(st.session_state.github_oauth_state)
+        if pending:
+            state = st.session_state.github_oauth_state
 
     if not pending:
-        # Still complete if we have live session + Cognito access token
         if not st.session_state.access_token or not st.session_state.user:
             st.session_state.github_error = (
                 "GitHub OAuth return missing pending state — sign in and Connect GitHub again."
@@ -104,6 +126,7 @@ def _handle_agentcore_github_callback() -> None:
             return
         cognito_access = st.session_state.access_token
         cognito_sub = st.session_state.user["sub"]
+        session_uri = session_id
     else:
         if not _restore_cognito_from_pending(pending):
             return
@@ -112,8 +135,11 @@ def _handle_agentcore_github_callback() -> None:
                 "GitHub OAuth was started for a different Cognito user."
             )
             return
+        # Must be the exact Cognito AccessToken used to mint the workload token
+        # that started GetResourceOauth2Token (AgentCore session binding).
         cognito_access = pending.get("access_token") or st.session_state.access_token
         cognito_sub = pending["cognito_sub"]
+        session_uri = pending.get("session_uri") or session_id
 
     if not cognito_access:
         st.session_state.github_error = (
@@ -123,19 +149,21 @@ def _handle_agentcore_github_callback() -> None:
 
     try:
         complete_github_oauth_session(
-            session_uri=session_id,
+            session_uri=session_uri,
             cognito_access_token=cognito_access,
         )
-        if not st.session_state.workload_token:
-            st.session_state.workload_token = get_workload_access_token_for_jwt(
-                cognito_access
-            )
+        # Remint workload only after session bind (same Cognito AccessToken)
+        st.session_state.workload_token = get_workload_access_token_for_jwt(
+            cognito_access
+        )
         gh_token = get_github_access_token(
             st.session_state.workload_token,
-            session_uri=session_id,
+            session_uri=session_uri,
         )
         gh_user = fetch_github_user(gh_token)
         save_link(cognito_sub, gh_user)
+        if state:
+            pop_pending_oauth(state)
         st.session_state.github_user = gh_user
         st.session_state.github_connected = True
         st.session_state.github_oauth_state = None
@@ -143,7 +171,10 @@ def _handle_agentcore_github_callback() -> None:
         st.session_state.github_session_uri = None
         st.session_state.github_error = None
     except Exception as exc:  # noqa: BLE001
-        st.session_state.github_error = str(exc)
+        st.session_state.github_error = (
+            f"{exc} — sign out, sign in once, Connect GitHub again "
+            "(do not re-login mid-flow; pending OAuth session is single-use)."
+        )
         st.session_state.github_connected = False
 
 
@@ -157,6 +188,8 @@ def _begin_github_connect(user: dict) -> None:
 
     state = new_oauth_state()
     st.session_state.github_oauth_state = state
+    st.session_state._oauth_callback_claimed = None
+    st.session_state.github_error = None
     resp = start_github_oauth(st.session_state.workload_token, custom_state=state)
     session_uri = resp.get("sessionUri")
     st.session_state.github_session_uri = session_uri
@@ -295,8 +328,9 @@ def home_page(user: dict) -> None:
                 f"Return URL: `{oauth2_return_url()}`"
             )
             st.caption(
-                "GitHub OAuth App callback must include:\n"
-                f"`{github_oauth_app_hint()}`"
+                "GitHub OAuth App **Authorization callback URL** must be exactly:\n"
+                f"`{github_oauth_app_hint()}`\n"
+                "(Not `http://localhost:8501/` — that is only AgentCore’s return URL.)"
             )
             if st.session_state.github_auth_url:
                 st.link_button(
@@ -329,6 +363,7 @@ def home_page(user: dict) -> None:
             st.session_state.github_oauth_state = None
             st.session_state.github_auth_url = None
             st.session_state.github_session_uri = None
+            st.session_state._oauth_callback_claimed = None
             st.session_state.last_issue = None
             st.session_state.auth_error = None
             st.session_state.github_error = None

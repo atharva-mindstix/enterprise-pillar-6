@@ -47,11 +47,16 @@ Flow: workload token → `GetResourceOauth2Token` (`USER_FEDERATION`, provider `
 ### One-time GitHub OAuth App setup
 
 1. GitHub → **Settings → Developer settings → OAuth Apps**
-2. Authorization callback URL **must** include the AgentCore Identity callback from the outbound provider (not Streamlit):
+2. Authorization callback URL **must** be exactly the AgentCore Identity callback
+   (replace any `http://localhost:8501/` callback — GitHub OAuth Apps use one URL;
+   localhost is only AgentCore’s *return* URL after GitHub finishes, not GitHub’s redirect):
 
 ```text
 https://bedrock-agentcore.us-west-2.amazonaws.com/identities/oauth2/callback/632c2a61-cbc6-4102-9b1e-17d47f886676
 ```
+
+If GitHub shows **“redirect_uri is not associated with this application”**, the OAuth App
+still has the wrong Authorization callback URL.
 
 3. Client ID/secret are already stored on outbound identity `pilllar-6-github` (Secrets Manager). Keep the same values in `.env.shared` only if you still need them for local debugging; Connect GitHub no longer exchanges codes against GitHub directly.
 
