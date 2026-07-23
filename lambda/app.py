@@ -1,10 +1,11 @@
 """
-AgentCore Gateway Lambda target — three demo tools in one function.
+AgentCore Gateway Lambda target — demo tools in one function.
 
 Tools:
   - inspect_repository
   - update_documentation
   - modify_source_code
+  - create_pull_request
 
 Gateway passes tool arguments in `event` and metadata in
 `context.client_context.custom['bedrockAgentCoreToolName']`.
@@ -248,6 +249,39 @@ def ensure_branch(
     return branch
 
 
+def build_pr_body(body: str | None, issue_number: int | None) -> str:
+    """Append Fixes #N when issue_number is set and not already referenced."""
+    text = (body or "").strip()
+    if issue_number is None:
+        return text
+    marker = f"#{issue_number}"
+    if marker in text:
+        return text
+    ref = f"Fixes #{issue_number}"
+    return f"{text}\n\n{ref}".strip() if text else ref
+
+
+def open_pull_request(
+    owner: str,
+    repo: str,
+    title: str,
+    head: str,
+    base: str,
+    token: str,
+    *,
+    body: str = "",
+    draft: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "title": title,
+        "head": head,
+        "base": base,
+        "body": body,
+        "draft": draft,
+    }
+    return _github_request("POST", f"/repos/{owner}/{repo}/pulls", token, body=payload)
+
+
 # ---------------------------------------------------------------------------
 # Tool handlers
 # ---------------------------------------------------------------------------
@@ -436,10 +470,70 @@ def modify_source_code(event: dict[str, Any], context: Any) -> dict[str, Any]:
     )
 
 
+def create_pull_request(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    owner = (event.get("owner") or "").strip()
+    repo = (event.get("repo") or "").strip()
+    title = (event.get("title") or "").strip()
+    head = (event.get("head") or event.get("branch") or "").strip()
+    base = (event.get("base") or "").strip()
+    body = event.get("body")
+    draft = bool(event.get("draft", False))
+    issue_number = event.get("issue_number")
+
+    if not owner or not repo:
+        return _error_response("owner and repo are required")
+    if not title:
+        return _error_response("title is required")
+    if not head:
+        return _error_response("head (branch with commits) is required")
+
+    if issue_number is not None:
+        try:
+            issue_number = int(issue_number)
+        except (TypeError, ValueError):
+            return _error_response("issue_number must be an integer")
+
+    token_or_err = _require_token(event, context)
+    if isinstance(token_or_err, dict):
+        return token_or_err
+    token = token_or_err
+
+    try:
+        if not base:
+            base = get_default_branch(owner, repo, token)
+        pr = open_pull_request(
+            owner,
+            repo,
+            title,
+            head,
+            base,
+            token,
+            body=build_pr_body(str(body) if body is not None else None, issue_number),
+            draft=draft,
+        )
+        return _text_response(
+            {
+                "tool": "create_pull_request",
+                "owner": owner,
+                "repo": repo,
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "state": pr.get("state"),
+                "draft": pr.get("draft"),
+                "html_url": pr.get("html_url"),
+                "head": (pr.get("head") or {}).get("ref"),
+                "base": (pr.get("base") or {}).get("ref"),
+            }
+        )
+    except GitHubError as exc:
+        return _error_response(f"GitHub API error ({exc.status}): {exc.message}")
+
+
 TOOL_HANDLERS: dict[str, Callable[[dict[str, Any], Any], dict[str, Any]]] = {
     "inspect_repository": inspect_repository,
     "update_documentation": update_documentation,
     "modify_source_code": modify_source_code,
+    "create_pull_request": create_pull_request,
 }
 
 

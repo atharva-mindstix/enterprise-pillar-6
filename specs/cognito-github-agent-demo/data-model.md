@@ -72,6 +72,7 @@ Tool permission is **not** a client-supplied list; it is the Cedar evaluation re
 | `inspect_repository` | permit |
 | `update_documentation` | permit |
 | `modify_source_code` | forbid / deny |
+| `create_pull_request` | permit |
 
 Policies live in AgentCore Policy Engine; Gateway runs in `ENFORCE` for acceptance.
 
@@ -82,6 +83,7 @@ Policies live in AgentCore Policy Engine; Gateway runs in `ENFORCE` for acceptan
 | `inspect_repository` | Read GitHub repo files / tree |
 | `update_documentation` | Edit docs paths only (e.g. `README*`, `docs/**`) — also enforce in tool |
 | `modify_source_code` | Edit non-doc source paths — **blocked by Cedar** in primary demo |
+| `create_pull_request` | Open a PR from head → base; optionally link `Fixes #N` |
 
 ## Traceability chain
 

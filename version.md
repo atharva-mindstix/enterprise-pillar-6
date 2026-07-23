@@ -163,3 +163,9 @@ Running append-only changelog of code changes in this project.
 
 - Runtime JWT aud check failed on AccessToken; Create Task invoke now uses IdToken
 - Updated invoke helper docs / ui README Bearer note
+
+## 2026-07-23 11:55 +05:30 — Lambda create_pull_request tool
+
+- Added `create_pull_request` to `lambda/app.py` (GitHub pulls API + Fixes #N body helper)
+- Extended `lambda/tool_definitions.json` and agent/system prompts so the agent opens a PR after docs commits
+- Added `lambda/check_create_pr.py` self-check for body/validation helpers

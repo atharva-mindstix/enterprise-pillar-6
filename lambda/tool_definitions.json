@@ -68,5 +68,24 @@
       },
       "required": ["owner", "repo", "path", "content", "message"]
     }
+  },
+  {
+    "name": "create_pull_request",
+    "description": "Open a GitHub pull request from a head branch into a base branch. Call after update_documentation (or other commits) on that head branch. Include issue_number to link Fixes #N.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": { "type": "string", "description": "Repository owner." },
+        "repo": { "type": "string", "description": "Repository name." },
+        "title": { "type": "string", "description": "Pull request title (include issue number when applicable)." },
+        "head": { "type": "string", "description": "Branch with the commits (same as branch used in update_documentation)." },
+        "branch": { "type": "string", "description": "Alias for head." },
+        "base": { "type": "string", "description": "Target branch (defaults to repository default branch)." },
+        "body": { "type": "string", "description": "Pull request description." },
+        "issue_number": { "type": "integer", "description": "Optional issue to reference via Fixes #N in the body." },
+        "draft": { "type": "boolean", "description": "Open as a draft PR (default false)." }
+      },
+      "required": ["owner", "repo", "title"]
+    }
   }
 ]

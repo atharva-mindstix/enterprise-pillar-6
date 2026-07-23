@@ -86,6 +86,7 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 | `inspect_repository` | Read repository contents / structure |
 | `update_documentation` | Change docs (e.g. README) |
 | `modify_source_code` | Change application source |
+| `create_pull_request` | Open a pull request from the agent branch |
 
 2. Tool authorization **SHALL** be enforced by an **AgentCore Policy Engine** with **Cedar** policies attached to the Gateway (`ENFORCE` mode for the accepted demo; `LOG_ONLY` allowed during bring-up).
 3. Demo policy intent (normative for acceptance):
@@ -95,6 +96,7 @@ Deliver a POC UI + AgentCore workflow that demonstrates, in one path:
 | `inspect_repository` | **permit** |
 | `update_documentation` | **permit** |
 | `modify_source_code` | **forbid** (or not permitted) |
+| `create_pull_request` | **permit** |
 
 4. Cedar uses default-deny; `forbid` overrides `permit`. Prompt text and “don’t register the tool in Python” alone are **insufficient** as the security boundary — Gateway + Cedar **SHALL** reject unauthorized tool execution.
 5. The model **MUST NOT** successfully execute `modify_source_code` for the primary demo path.

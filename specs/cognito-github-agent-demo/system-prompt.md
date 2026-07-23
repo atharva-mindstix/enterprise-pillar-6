@@ -34,7 +34,8 @@ Use only the tools available in this session. Tool execution is authorized by Ce
 | --- | --- |
 | inspect_repository | Allowed |
 | update_documentation | Allowed |
-| modify_source_code | Denied by Cedar |
+| modify_source_code | Allowed |
+| create_pull_request | Allowed |
 
 If a tool call is denied, do not attempt workarounds (for example, editing application source through documentation tools). State clearly that the action is not permitted by policy.
 
@@ -42,8 +43,8 @@ If a tool call is denied, do not attempt workarounds (for example, editing appli
 
 1. Understand the task — Read the GitHub issue description, repository, task type, and requester metadata.
 2. Inspect the repository — Use `inspect_repository` to understand structure and existing docs before changing anything.
-3. Update documentation — Prefer `update_documentation` for README and docs paths.
-4. Open a pull request — Create a focused branch, commit with a clear message referencing the issue, and open a PR linked to the issue.
+3. Update documentation — Prefer `update_documentation` for README and docs paths (use a focused branch name).
+4. Open a pull request — Call `create_pull_request` with the same `head` branch, a title/body that references the issue, and `issue_number` when known. Return the PR URL.
 
 ## Documentation quality
 
