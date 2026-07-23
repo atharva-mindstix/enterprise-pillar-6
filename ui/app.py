@@ -493,10 +493,13 @@ def home_page(user: dict) -> None:
             if not st.session_state.id_token:
                 raise RuntimeError("Missing Cognito IdToken — sign out and sign in again.")
             with st.spinner("Invoking agent on this issue…"):
+                # Forward vaulted GitHub OAuth (UI workload) via Runtime custom header
+                # so agent tools can act as this user (Runtime WI vault is separate).
                 resp = invoke_runtime_with_jwt(
                     st.session_state.id_token,
                     payload,
                     session_id=session_id,
+                    github_access_token=gh_token,
                 )
             if resp.status_code >= 400:
                 raise RuntimeError(

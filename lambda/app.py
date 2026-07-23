@@ -75,13 +75,9 @@ def resolve_github_token(event: dict[str, Any], context: Any) -> str:
     Resolve GitHub token for this invocation.
 
     Priority:
-    1. GITHUB_PERSONAL_ACCESS_TOKEN env (fixture / local testing)
-    2. Authorization forwarded via Gateway interceptor (context or event headers)
+    1. Authorization forwarded by agent/Gateway (OAuth USER_FEDERATION — Option A)
+    2. GITHUB_PERSONAL_ACCESS_TOKEN env (fixture only; remove in prod)
     """
-    env_token = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", "").strip()
-    if env_token:
-        return env_token
-
     custom: dict[str, Any] = {}
     if context is not None and getattr(context, "client_context", None):
         custom = getattr(context.client_context, "custom", None) or {}
@@ -91,7 +87,26 @@ def resolve_github_token(event: dict[str, Any], context: Any) -> str:
         if raw:
             return _strip_bearer(str(raw))
 
-    return ""
+    return os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", "").strip()
+
+
+def _event_for_log(event: dict[str, Any]) -> dict[str, Any]:
+    """Redact Authorization / _headers secrets before logging."""
+    if "_headers" not in event and "authorization" not in {
+        k.lower() for k in event
+    }:
+        return event
+    redacted = dict(event)
+    headers = dict(redacted.get("_headers") or {})
+    for key in list(headers):
+        if "auth" in key.lower():
+            headers[key] = "***"
+    if headers:
+        redacted["_headers"] = headers
+    for key in list(redacted):
+        if key.lower() in ("authorization", "bedrockagentcoreauthorization"):
+            redacted[key] = "***"
+    return redacted
 
 
 def _strip_bearer(value: str) -> str:
@@ -303,8 +318,9 @@ def _require_token(event: dict[str, Any], context: Any) -> str | dict[str, Any]:
     token = resolve_github_token(event, context)
     if not token:
         return _error_response(
-            "GitHub token not available. Set GITHUB_PERSONAL_ACCESS_TOKEN on the Lambda "
-            "for fixture testing, or forward Authorization from a Gateway interceptor."
+            "GitHub token not available. Forward OAuth via _headers.Authorization "
+            "(agent Identity USER_FEDERATION), or set GITHUB_PERSONAL_ACCESS_TOKEN "
+            "on the Lambda for fixture testing only."
         )
     return token
 
@@ -556,7 +572,7 @@ def _custom_get(context: Any, key: str) -> str:
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    logger.info("Gateway invoke event=%s", json.dumps(event))
+    logger.info("Gateway invoke event=%s", json.dumps(_event_for_log(event)))
 
     try:
         tool_name = _parse_tool_name(context)

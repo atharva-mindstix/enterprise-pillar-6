@@ -1,13 +1,17 @@
 """AgentCore Gateway MCP client (IAM / SigV4) for LangChain.
 
 Bootcamp gateway is AWS_IAM inbound — use mcp-proxy-for-aws, not Bearer JWT.
+
+Option A: when a GitHub OAuth token is provided, an MCP tool interceptor injects
+`_headers.Authorization` into tool args so the Gateway Lambda can read it
+(see lambda/app.py resolve_github_token).
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +39,35 @@ def aws_region() -> str:
     return os.getenv("AWS_REGION", "us-west-2")
 
 
-async def load_gateway_mcp_tools() -> tuple[list[Any], Any]:
+def make_github_auth_interceptor(github_token: str) -> Callable:
+    """Inject Authorization into tool args for Lambda (Option A forward)."""
+
+    async def interceptor(request: Any, handler: Callable) -> Any:
+        args = {
+            **(request.args or {}),
+            "_headers": {"Authorization": f"Bearer {github_token}"},
+        }
+        return await handler(request.override(args=args))
+
+    return interceptor
+
+
+def inject_github_auth_args(args: dict[str, Any], github_token: str) -> dict[str, Any]:
+    """Pure helper (self-check): merge _headers without mutating input."""
+    return {
+        **args,
+        "_headers": {"Authorization": f"Bearer {github_token}"},
+    }
+
+
+async def load_gateway_mcp_tools(
+    github_token: str | None = None,
+) -> tuple[list[Any], Any]:
     """
     Open IAM MCP session and load LangChain tools.
 
     Returns (tools, session_cm) where session_cm is an async context manager
-    that must stay entered for the duration of tool use. Caller should use:
-
-        tools, stack = await load_gateway_mcp_tools()
-        # ... invoke agent with tools while gateway session is held by caller
+    that must stay entered for the duration of tool use.
     """
     from contextlib import AsyncExitStack
 
@@ -72,11 +96,15 @@ async def load_gateway_mcp_tools() -> tuple[list[Any], Any]:
         )
         session = await stack.enter_async_context(ClientSession(read, write))
         await session.initialize()
-        tools = await load_mcp_tools(session)
+        interceptors = (
+            [make_github_auth_interceptor(github_token)] if github_token else None
+        )
+        tools = await load_mcp_tools(session, tool_interceptors=interceptors)
         logger.info(
-            "Loaded %d gateway MCP tools from %s",
+            "Loaded %d gateway MCP tools from %s (github_oauth_forward=%s)",
             len(tools),
             endpoint,
+            bool(github_token),
         )
         return tools, stack
     except Exception as exc:

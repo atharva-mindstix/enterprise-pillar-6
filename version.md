@@ -169,3 +169,20 @@ Running append-only changelog of code changes in this project.
 - Added `create_pull_request` to `lambda/app.py` (GitHub pulls API + Fixes #N body helper)
 - Extended `lambda/tool_definitions.json` and agent/system prompts so the agent opens a PR after docs commits
 - Added `lambda/check_create_pr.py` self-check for body/validation helpers
+
+## 2026-07-23 13:09 +05:30 — OAuth B+A forward (no Lambda deploy)
+
+- Agent: `github_oauth.py` fetches vaulted GitHub token via `@requires_access_token` (USER_FEDERATION); MCP interceptor injects `_headers.Authorization`
+- Lambda (code only, not deployed): prefer forwarded OAuth over PAT; redact `_headers` in logs
+- Added root `check_oauth_forward.py` self-check
+
+## 2026-07-23 15:53 +05:30 — Pass ResourceOauth2ReturnUrl for agent OAuth
+
+- `github_oauth.py`: set `callback_url` on `@requires_access_token` (fixes ValidationException)
+- `agentcore.json`: add `AGENTCORE_OAUTH2_RETURN_URL`, provider, scopes env vars for runtime
+
+## 2026-07-23 16:12 +05:30 — UI forwards GitHub OAuth via Runtime custom header
+
+- Bypass Runtime WI vault mismatch: UI sends vaulted token as `X-Amzn-Bedrock-AgentCore-Runtime-Custom-Github-Access-Token`
+- Agent prefers that header (then payload, then Identity); allowlisted in `agentcore.json`
+- Streamlit Create Task passes `github_access_token=gh_token` on invoke

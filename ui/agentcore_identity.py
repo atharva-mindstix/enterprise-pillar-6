@@ -187,17 +187,35 @@ def get_github_access_token(
     return token
 
 
-def invoke_headers(cognito_jwt: str, session_id: str) -> dict[str, str]:
+# Must match agentcore.json requestHeaderAllowlist and Runtime Custom- prefix.
+GITHUB_ACCESS_TOKEN_HEADER = (
+    "X-Amzn-Bedrock-AgentCore-Runtime-Custom-Github-Access-Token"
+)
+
+
+def invoke_headers(
+    cognito_jwt: str,
+    session_id: str,
+    *,
+    github_access_token: str | None = None,
+) -> dict[str, str]:
     """Headers for JWT Bearer invoke of AgentCore Runtime (D1-B4).
 
     Use Cognito IdToken when authorizer allowedAudience is the app client id
     (AccessToken has no matching aud → Claim 'aud' value mismatch).
+
+    Optional github_access_token: vaulted USER_FEDERATION token from UI workload
+    (githubWorkflowUi), forwarded so the agent can inject it into Gateway tools
+    without Runtime Identity vault (different workload).
     """
-    return {
+    headers = {
         "Authorization": f"Bearer {cognito_jwt}",
         "Content-Type": "application/json",
         "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": session_id,
     }
+    if github_access_token:
+        headers[GITHUB_ACCESS_TOKEN_HEADER] = github_access_token
+    return headers
 
 
 def invoke_url(agent_runtime_arn: str | None = None, qualifier: str = "DEFAULT") -> str:
@@ -220,11 +238,16 @@ def invoke_runtime_with_jwt(
     session_id: str = "d1b-verify-session",
     agent_runtime_arn: str | None = None,
     timeout: float = 300,
+    github_access_token: str | None = None,
 ) -> requests.Response:
     """POST /invocations with Cognito Bearer JWT (prefer IdToken for aud check)."""
     return requests.post(
         invoke_url(agent_runtime_arn),
-        headers=invoke_headers(cognito_jwt, session_id),
+        headers=invoke_headers(
+            cognito_jwt,
+            session_id,
+            github_access_token=github_access_token,
+        ),
         json=payload,
         timeout=timeout,
     )

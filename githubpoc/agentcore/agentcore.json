@@ -26,12 +26,25 @@
         }
       },
       "requestHeaderAllowlist": [
-        "Authorization"
+        "Authorization",
+        "X-Amzn-Bedrock-AgentCore-Runtime-Custom-Github-Access-Token"
       ],
       "envVars": [
         {
           "name": "GATEWAY_BOOTCAMP_GATEWAY_URL",
           "value": "https://bootcamp-gateway-jwodqi3x4j.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+        },
+        {
+          "name": "AGENTCORE_OAUTH2_RETURN_URL",
+          "value": "http://localhost:8501/"
+        },
+        {
+          "name": "AGENTCORE_GITHUB_PROVIDER",
+          "value": "pilllar-6-github"
+        },
+        {
+          "name": "GITHUB_OAUTH_SCOPES",
+          "value": "read:user repo"
         }
       ],
       "connections": [

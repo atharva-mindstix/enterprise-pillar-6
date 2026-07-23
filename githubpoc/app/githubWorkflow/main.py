@@ -8,6 +8,7 @@ from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
 from mcp_client.client import load_gateway_mcp_tools
+from github_token import resolve_github_token_async
 from prompt import build_system_prompt
 
 LangchainInstrumentor().instrument()
@@ -17,6 +18,7 @@ log = app.logger
 
 _llm = None
 
+
 def get_or_create_model():
     global _llm
     if _llm is None:
@@ -24,14 +26,12 @@ def get_or_create_model():
     return _llm
 
 
-# Define a simple function tool
 @tool
 def add_numbers(a: int, b: int) -> int:
     """Return the sum of two numbers"""
     return a + b
 
 
-# Define a collection of tools used by the model
 tools = [add_numbers]
 
 # Module-level checkpointer preserves conversation history across invocations.
@@ -55,13 +55,15 @@ def touch_thread(thread_id):
     _thread_ids[thread_id] = True
 
 
-
 @app.entrypoint
 async def invoke(payload, context):
     log.info("Invoking Agent.....")
 
-    # IAM MCP session to bootcamp AgentCore Gateway (must stay open while tools run)
-    mcp_tools, gateway_stack = await load_gateway_mcp_tools()
+    # Prefer UI-forwarded GitHub OAuth (custom header); Identity fetch is fallback only
+    github_token = await resolve_github_token_async(payload, context)
+
+    # IAM MCP session; Option A interceptor injects Authorization for Lambda
+    mcp_tools, gateway_stack = await load_gateway_mcp_tools(github_token)
     try:
         session_context = payload.get("session")
         system_prompt = build_system_prompt(session_context)
